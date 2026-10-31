@@ -325,7 +325,8 @@ package body types is ----------------------------------------------------------
 
   begin
 
-    assert c_elem_size /= arg'element'length
+    -- arg(arg'low)'length, not arg'element'length: Quartus Lite / Standard have no 'element
+    assert arg'length = 0 or c_elem_size /= arg(arg'low)'length
       report "Warning: Mismatch between element size and array element size (it will be resized to c_ELEM_SIZE)"
       severity WARNING;
 
