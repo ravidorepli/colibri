@@ -41,22 +41,22 @@ entity simple_dpram is
     --! RAM width in bits (legacy behaviour)
     g_DATA_WIDTH   : positive := 16;
     --! RAM port A width in bits (by default set to g_DATA_WIDTH)
-    g_A_DATA_WIDTH : positive := g_DATA_WIDTH;
+    g_A_DATA_WIDTH : natural  := 0;  -- 0: g_DATA_WIDTH
     --! RAM port B width in bits (modify to infer mixed width RAM)
-    g_B_DATA_WIDTH : positive := g_A_DATA_WIDTH;
+    g_B_DATA_WIDTH : natural  := 0;  -- 0: the port A width
     --! RAM depth as number of data words of the largest port size
     g_N_WORDS      : positive := 10;
     --! RAM address A port
-    g_A_ADDR_WIDTH : positive := log2ceil(max_int(g_A_DATA_WIDTH, g_B_DATA_WIDTH) * g_N_WORDS / g_A_DATA_WIDTH);
+    g_A_ADDR_WIDTH : natural  := 0;  -- 0: derived (mem_pkg dpram_addr_a)
     --! RAM address B port
-    g_B_ADDR_WIDTH : positive := log2ceil(max_int(g_A_DATA_WIDTH, g_B_DATA_WIDTH) * g_N_WORDS / g_B_DATA_WIDTH);
+    g_B_ADDR_WIDTH : natural  := 0;  -- 0: derived (mem_pkg dpram_addr_b)
     --! Add output register to ease timing
     g_REGISTER_OUT : boolean  := false;
 
     --! initialization file
     g_INIT_FILE  : string                                        := "";
     --! Initial value to fill the RAM with (in case no init. file is specified)
-    g_INIT_WORD  : std_logic_vector(g_A_DATA_WIDTH - 1 downto 0) := (others => '0');
+    g_INIT_WORD : std_logic_vector := "0";  -- one bit = every bit
     --! implementation style, use VIVADO or QUARTUS to force a specific implementation
     g_IMPL_STYLE : compiler_t                                    := get_compiler
   );
@@ -64,14 +64,14 @@ entity simple_dpram is
     --! Write port
     wrclk_i  : in    std_logic;                                     --! Clock
     wren_i   : in    std_logic;                                     --! Write enable
-    wraddr_i : in    unsigned(g_A_ADDR_WIDTH - 1 downto 0);         --! Address
-    wrdata_i : in    std_logic_vector(g_A_DATA_WIDTH - 1 downto 0); --! Data input
+    wraddr_i : in    unsigned(dpram_addr_a(g_DATA_WIDTH, g_A_DATA_WIDTH, g_B_DATA_WIDTH, g_N_WORDS, g_A_ADDR_WIDTH) - 1 downto 0);         --! Address
+    wrdata_i : in    std_logic_vector(dpram_width_a(g_DATA_WIDTH, g_A_DATA_WIDTH) - 1 downto 0); --! Data input
 
     --! Read port
     rdclk_i  : in    std_logic;                                    --! Clock
     rden_i   : in    std_logic;                                    --! Read enable
-    rdaddr_i : in    unsigned(g_B_ADDR_WIDTH - 1 downto 0);        --! Address
-    rddata_o : out   std_logic_vector(g_B_DATA_WIDTH - 1 downto 0) --! Data output
+    rdaddr_i : in    unsigned(dpram_addr_b(g_DATA_WIDTH, g_A_DATA_WIDTH, g_B_DATA_WIDTH, g_N_WORDS, g_B_ADDR_WIDTH) - 1 downto 0);        --! Address
+    rddata_o : out   std_logic_vector(dpram_width_b(g_DATA_WIDTH, g_A_DATA_WIDTH, g_B_DATA_WIDTH) - 1 downto 0) --! Data output
   );
 end entity simple_dpram;
 
@@ -79,16 +79,23 @@ end entity simple_dpram;
 
 architecture rtl of simple_dpram is
 
+  -- the resolved generics (0 = default, see mem_pkg)
+  constant c_A_DATA_WIDTH : positive := dpram_width_a(g_DATA_WIDTH, g_A_DATA_WIDTH);
+  constant c_B_DATA_WIDTH : positive := dpram_width_b(g_DATA_WIDTH, g_A_DATA_WIDTH, g_B_DATA_WIDTH);
+  constant c_A_ADDR_WIDTH : positive := dpram_addr_a(g_DATA_WIDTH, g_A_DATA_WIDTH, g_B_DATA_WIDTH, g_N_WORDS, g_A_ADDR_WIDTH);
+  constant c_B_ADDR_WIDTH : positive := dpram_addr_b(g_DATA_WIDTH, g_A_DATA_WIDTH, g_B_DATA_WIDTH, g_N_WORDS, g_B_ADDR_WIDTH);
+  constant c_INIT_WORD    : std_logic_vector(c_A_DATA_WIDTH - 1 downto 0) := fit_init(g_INIT_WORD, c_A_DATA_WIDTH);
+
   --! internal memory width
-  constant c_MEM_WIDTH  : positive := min_int(g_A_DATA_WIDTH, g_B_DATA_WIDTH);
+  constant c_MEM_WIDTH  : positive := min_int(c_A_DATA_WIDTH, c_B_DATA_WIDTH);
   --! port ratio
-  constant c_PORT_RATIO : positive := max_int(g_A_DATA_WIDTH, g_B_DATA_WIDTH) / c_MEM_WIDTH;
+  constant c_PORT_RATIO : positive := max_int(c_A_DATA_WIDTH, c_B_DATA_WIDTH) / c_MEM_WIDTH;
   --! internal memory depth
   constant c_MEM_DEPTH  : positive := g_N_WORDS * c_PORT_RATIO;
   --! Ratio between B port and memory
-  constant c_A_RATIO    : positive := g_A_DATA_WIDTH / c_MEM_WIDTH;
+  constant c_A_RATIO    : positive := c_A_DATA_WIDTH / c_MEM_WIDTH;
   --! Ratio between B port and memory
-  constant c_B_RATIO    : positive := g_B_DATA_WIDTH / c_MEM_WIDTH;
+  constant c_B_RATIO    : positive := c_B_DATA_WIDTH / c_MEM_WIDTH;
 
   signal read_b : std_logic_vector(rddata_o'range);
 
@@ -100,11 +107,11 @@ begin --------------------------------------------------------------------------
     simple_dpram_altera_inst : entity work.simple_dpram_altera
       generic map (
         g_DATA_WIDTH   => g_DATA_WIDTH,
-        g_A_DATA_WIDTH => g_A_DATA_WIDTH,
-        g_B_DATA_WIDTH => g_B_DATA_WIDTH,
+        g_A_DATA_WIDTH => c_A_DATA_WIDTH,
+        g_B_DATA_WIDTH => c_B_DATA_WIDTH,
         g_N_WORDS      => g_N_WORDS,
-        g_A_ADDR_WIDTH => g_A_ADDR_WIDTH,
-        g_B_ADDR_WIDTH => g_B_ADDR_WIDTH,
+        g_A_ADDR_WIDTH => c_A_ADDR_WIDTH,
+        g_B_ADDR_WIDTH => c_B_ADDR_WIDTH,
         g_REGISTER_OUT => g_REGISTER_OUT
       )
       port map (
@@ -123,14 +130,14 @@ begin --------------------------------------------------------------------------
     simple_dpram_xilinx_inst : entity work.simple_dpram_xilinx
       generic map (
         g_DATA_WIDTH   => g_DATA_WIDTH,
-        g_A_DATA_WIDTH => g_A_DATA_WIDTH,
-        g_B_DATA_WIDTH => g_B_DATA_WIDTH,
+        g_A_DATA_WIDTH => c_A_DATA_WIDTH,
+        g_B_DATA_WIDTH => c_B_DATA_WIDTH,
         g_N_WORDS      => g_N_WORDS,
-        g_A_ADDR_WIDTH => g_A_ADDR_WIDTH,
-        g_B_ADDR_WIDTH => g_B_ADDR_WIDTH,
+        g_A_ADDR_WIDTH => c_A_ADDR_WIDTH,
+        g_B_ADDR_WIDTH => c_B_ADDR_WIDTH,
         g_REGISTER_OUT => g_REGISTER_OUT,
         g_INIT_FILE    => g_INIT_FILE,
-        g_INIT_WORD    => g_INIT_WORD
+        g_INIT_WORD    => c_INIT_WORD
       )
       port map (
         wrclk_i  => wrclk_i,

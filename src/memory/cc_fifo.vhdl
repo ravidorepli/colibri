@@ -41,7 +41,8 @@ entity cc_fifo is
     --! size of input words in bits
     g_INPUT_WIDTH  : positive := 8;
     --! size of output words in bits
-    g_OUTPUT_WIDTH : positive := g_INPUT_WIDTH;
+    --! (0 = g_INPUT_WIDTH: Quartus Lite / Standard reject a default taken from another generic)
+    g_OUTPUT_WIDTH : natural  := 0;
     --! enable first word fall through (or lookahead, or streaming)
     g_ENABLE_FWFT  : boolean  := false;
     --! Peek on next data word to read on write clock
@@ -54,7 +55,7 @@ entity cc_fifo is
     data_i      : in    std_logic_vector(g_INPUT_WIDTH - 1 downto 0);  --! data_i input on write clock
     wrreq_i     : in    std_logic;                                     --! write request on write clock
     rdreq_i     : in    std_logic;                                     --! read request on read clock
-    q_o         : out   std_logic_vector(g_OUTPUT_WIDTH - 1 downto 0); --! data_i output on read clock
+    q_o         : out   std_logic_vector(or_default(g_OUTPUT_WIDTH, g_INPUT_WIDTH) - 1 downto 0); --! data_i output on read clock
     wrusedw_o   : out   unsigned(log2ceil(g_NUM_WORDS) - 1 downto 0);  --! number of words used on write clock
     rdusedw_o   : out   unsigned(log2ceil(g_NUM_WORDS) - 1 downto 0);  --! number of words used on read clock
     wrempty_o   : out   std_logic;                                     --! empty signal on write clock
@@ -68,8 +69,10 @@ end entity cc_fifo;
 
 architecture rtl of cc_fifo is
 
+  constant c_OUTPUT_WIDTH : positive := or_default(g_OUTPUT_WIDTH, g_INPUT_WIDTH);
+
   -- Width in bits of the words stored in the FIFO
-  constant c_FIFO_WIDTH : positive := max_int(g_INPUT_WIDTH, g_OUTPUT_WIDTH);
+  constant c_FIFO_WIDTH : positive := max_int(g_INPUT_WIDTH, c_OUTPUT_WIDTH);
 
   -- cc_fifo memory storage
 
@@ -138,14 +141,14 @@ begin
   ------------------------------------------------------------------------------
   -- Input width conversion
   ------------------------------------------------------------------------------
-  gen_up_conversion : if g_INPUT_WIDTH < g_OUTPUT_WIDTH generate
+  gen_up_conversion : if g_INPUT_WIDTH < c_OUTPUT_WIDTH generate
     signal gbx_ready : std_logic;
   begin
 
     gearbox_inst : entity colibri.gearbox
       generic map (
         g_INPUT_WIDTH  => g_INPUT_WIDTH,
-        g_OUTPUT_WIDTH => g_OUTPUT_WIDTH
+        g_OUTPUT_WIDTH => c_OUTPUT_WIDTH
       )
       port map (
         clk_i       => wrclk_i,
@@ -226,7 +229,7 @@ begin
   empty_sync_inst : entity colibri.synchro
     generic map (
       g_DATA_LENGTH => 1,
-      g_INIT_VALUE  => (others => '1')
+      g_INIT_VALUE  => "1"
     )
     port map (
       clk_i     => wrclk_i,
@@ -302,7 +305,7 @@ begin
   ------------------------------------------------------------------------------
   -- Peek on Write logic (only available when input and output widths are the same)
   ------------------------------------------------------------------------------
-  gen_peek_write : if g_PEEK_NEXT and g_INPUT_WIDTH = g_OUTPUT_WIDTH generate
+  gen_peek_write : if g_PEEK_NEXT and g_INPUT_WIDTH = c_OUTPUT_WIDTH generate
 
     type sig_t is record
       ptr    : natural range 0 to g_NUM_WORDS - 1;
@@ -394,7 +397,7 @@ begin
   ------------------------------------------------------------------------------
   -- First Word Fall Through logic
   ------------------------------------------------------------------------------
-  gen_stream_fifo : if g_ENABLE_FWFT or g_INPUT_WIDTH > g_OUTPUT_WIDTH generate
+  gen_stream_fifo : if g_ENABLE_FWFT or g_INPUT_WIDTH > c_OUTPUT_WIDTH generate
     signal reg_valid : std_logic;
     signal cmb_valid : std_logic;
   begin
@@ -439,7 +442,7 @@ begin
   ------------------------------------------------------------------------------
   -- Output width conversion
   ------------------------------------------------------------------------------
-  gen_down_conversion : if g_INPUT_WIDTH > g_OUTPUT_WIDTH generate
+  gen_down_conversion : if g_INPUT_WIDTH > c_OUTPUT_WIDTH generate
     signal gbx_valid    : std_logic;
     signal gbx_data_out : std_logic_vector(q_o'range);
   begin
@@ -447,7 +450,7 @@ begin
     gearbox_inst : entity colibri.gearbox
       generic map (
         g_INPUT_WIDTH  => g_INPUT_WIDTH,
-        g_OUTPUT_WIDTH => g_OUTPUT_WIDTH
+        g_OUTPUT_WIDTH => c_OUTPUT_WIDTH
       )
       port map (
         clk_i       => rdclk_i,

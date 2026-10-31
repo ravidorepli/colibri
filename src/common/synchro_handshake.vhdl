@@ -152,7 +152,7 @@ begin
   sync_feedback_inst : entity work.synchro
     generic map (
       g_DATA_LENGTH => 1,
-      g_INIT_VALUE  => (others => '1'),
+      g_INIT_VALUE  => "1",
       g_NUM_STAGES  => g_NUM_STAGES
     )
     port map (
@@ -166,7 +166,7 @@ begin
   sync_feedforward_inst : entity work.synchro
     generic map (
       g_DATA_LENGTH => 1,
-      g_INIT_VALUE  => (others => '1'),
+      g_INIT_VALUE  => "1",
       g_NUM_STAGES  => g_NUM_STAGES
     )
     port map (

@@ -16,6 +16,9 @@ library ieee;
   use ieee.std_logic_1164.all;
   use ieee.numeric_std.all;
 
+library colibri;
+  use colibri.utils.all;
+
 ----------------------------------------------------------------------------------------------------
 
 entity synchro is
@@ -23,7 +26,9 @@ entity synchro is
     --! Slv data length
     g_DATA_LENGTH : positive range 1 to natural'high;
     --! Initial values for the output data
-    g_INIT_VALUE  : std_logic_vector(g_DATA_LENGTH - 1 downto 0) := (others => '0');
+    --! (one bit = every bit; unconstrained: Quartus Lite / Standard reject a generic typed by
+    --! another generic)
+    g_INIT_VALUE  : std_logic_vector := "0";
 
     --! Number of register stages (must be at least 2)
     g_NUM_STAGES : natural range 2 to natural'high := 2
@@ -49,7 +54,9 @@ architecture rtl of synchro is
   type sync_t is array (0 to g_NUM_STAGES - 1) of data_t;
 
   -- Synchronization chain of registers
-  signal sync_chain : sync_t := (others => g_INIT_VALUE);
+  constant c_INIT_VALUE : data_t := fit_init(g_INIT_VALUE, g_DATA_LENGTH);
+
+  signal sync_chain : sync_t := (others => c_INIT_VALUE);
 
   -- CDC attributes for ALTERA/INTEL
   attribute preserve                       : boolean;
@@ -75,7 +82,7 @@ begin
 
     if rising_edge(clk_i) then
       if (reset_i = '1') then
-        sync_chain <= (others => g_INIT_VALUE);
+        sync_chain <= (others => c_INIT_VALUE);
       else
         sync_chain(0) <= data_i;
 

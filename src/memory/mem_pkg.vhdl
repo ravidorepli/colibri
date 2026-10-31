@@ -35,6 +35,16 @@ package mem is
     init_word : std_logic_vector
   ) return slv_array_2d_t;
 
+  --! simple_dpram width / address rules (port A width 0 = g_DATA_WIDTH, port B width 0 = port A,
+  --! address width 0 = derived from the widths and g_N_WORDS). A generic whose default depends on
+  --! another generic is VHDL-2008, which Quartus Lite / Standard reject: these resolve the 0s.
+  function dpram_width_a (data_width : positive; width_a : natural) return positive;
+  function dpram_width_b (data_width : positive; width_a : natural; width_b : natural) return positive;
+  function dpram_addr_a (data_width : positive; width_a : natural; width_b : natural;
+                         n_words : positive; addr_a : natural) return positive;
+  function dpram_addr_b (data_width : positive; width_a : natural; width_b : natural;
+                         n_words : positive; addr_b : natural) return positive;
+
 end package mem;
 
 package body mem is
@@ -126,5 +136,43 @@ package body mem is
     return v_ram;
 
   end function init_mem_hex;
+
+  function dpram_width_a (data_width : positive; width_a : natural) return positive is
+  begin
+
+    return or_default(width_a, data_width);
+
+  end function dpram_width_a;
+
+  function dpram_width_b (data_width : positive; width_a : natural; width_b : natural) return positive is
+  begin
+
+    return or_default(width_b, dpram_width_a(data_width, width_a));
+
+  end function dpram_width_b;
+
+  function dpram_addr_a (data_width : positive; width_a : natural; width_b : natural;
+                         n_words : positive; addr_a : natural) return positive is
+
+    constant c_A : positive := dpram_width_a(data_width, width_a);
+    constant c_B : positive := dpram_width_b(data_width, width_a, width_b);
+
+  begin
+
+    return or_default(addr_a, log2ceil(max_int(c_A, c_B) * n_words / c_A));
+
+  end function dpram_addr_a;
+
+  function dpram_addr_b (data_width : positive; width_a : natural; width_b : natural;
+                         n_words : positive; addr_b : natural) return positive is
+
+    constant c_A : positive := dpram_width_a(data_width, width_a);
+    constant c_B : positive := dpram_width_b(data_width, width_a, width_b);
+
+  begin
+
+    return or_default(addr_b, log2ceil(max_int(c_A, c_B) * n_words / c_B));
+
+  end function dpram_addr_b;
 
 end package body mem;

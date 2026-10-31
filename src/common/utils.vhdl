@@ -38,6 +38,14 @@ package utils is
   function max_int (a : integer; b : integer) return integer;
   function min_int (a : integer; b : integer) return integer;
 
+  --! value, or fallback when value is 0: a generic whose default depends on another generic
+  --! (VHDL-2008) is a natural defaulting to 0 instead, resolved with this function
+  function or_default (value : natural; fallback : natural) return natural;
+
+  --! an initial value of width bits: init itself when it has width bits, or its single bit
+  --! repeated (an unconstrained init generic defaulting to "0" replaces (others => '0'))
+  function fit_init (init : std_logic_vector; width : positive) return std_logic_vector;
+
   --! computes ceil(log2(arg)) and return unsigned of bits size
   function log2ceil (arg : unsigned; bits : natural) return unsigned;
 
@@ -179,6 +187,34 @@ package body utils is
     return b;
 
   end function min_int;
+
+  function or_default (value : natural; fallback : natural) return natural is
+  begin
+
+    if value = 0 then
+      return fallback;
+    end if;
+    return value;
+
+  end function or_default;
+
+  function fit_init (init : std_logic_vector; width : positive) return std_logic_vector is
+
+    variable v_ret : std_logic_vector(width - 1 downto 0);
+
+  begin
+
+    assert init'length = width or init'length = 1
+      report "fit_init: an initial value has 1 bit or the full width"
+      severity failure;
+    if init'length = width then
+      v_ret := init;
+    else
+      v_ret := (others => init(init'low));
+    end if;
+    return v_ret;
+
+  end function fit_init;
 
   function log2ceil (arg : unsigned; bits : natural) return unsigned is
 
