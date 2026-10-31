@@ -393,7 +393,8 @@ package body types is ----------------------------------------------------------
 
   begin
 
-    v_slv := slv_array_to_slv(arg, c_ELEM_SIZE) sll c_n * c_ELEM_SIZE;
+    -- numeric_std shift_left, not sll on std_logic_vector (Quartus Lite / Standard lack it)
+    v_slv := std_logic_vector(shift_left(unsigned(slv_array_to_slv(arg, c_ELEM_SIZE)), c_n * c_ELEM_SIZE));
     return slv_to_slv_array(v_slv, c_ELEM_SIZE);
 
   end function shift_left;
@@ -405,7 +406,8 @@ package body types is ----------------------------------------------------------
 
   begin
 
-    v_slv := slv_array_to_slv(arg, c_ELEM_SIZE) srl c_n * c_ELEM_SIZE;
+    -- numeric_std shift_right, not srl on std_logic_vector (Quartus Lite / Standard lack it)
+    v_slv := std_logic_vector(shift_right(unsigned(slv_array_to_slv(arg, c_ELEM_SIZE)), c_n * c_ELEM_SIZE));
     return slv_to_slv_array(v_slv, c_ELEM_SIZE);
 
   end function shift_right;
