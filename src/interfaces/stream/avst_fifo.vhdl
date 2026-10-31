@@ -45,7 +45,7 @@ entity avst_fifo is
     snk_valid_i : in    std_logic;
     snk_sop_i   : in    std_logic;
     snk_eop_i   : in    std_logic;
-    snk_empty_i : in    unsigned(maximum(log2ceil(g_DATA_SYM), 1) - 1 downto 0);
+    snk_empty_i : in    unsigned(max_int(log2ceil(g_DATA_SYM), 1) - 1 downto 0);
     snk_data_i  : in    std_logic_vector(g_SYM_WIDTH * g_DATA_SYM - 1 downto 0);
 
     --! Avalon stream output
@@ -53,7 +53,7 @@ entity avst_fifo is
     src_valid_o : out   std_logic;
     src_sop_o   : out   std_logic;
     src_eop_o   : out   std_logic;
-    src_empty_o : out   unsigned(maximum(log2ceil(g_DATA_SYM), 1) - 1 downto 0);
+    src_empty_o : out   unsigned(max_int(log2ceil(g_DATA_SYM), 1) - 1 downto 0);
     src_data_o  : out   std_logic_vector(g_SYM_WIDTH * g_DATA_SYM - 1 downto 0)
   );
 end entity avst_fifo;
@@ -64,7 +64,7 @@ architecture rtl of avst_fifo is
 
   --! Data/empty bus widths in terms of bits
   constant c_DATA_WIDTH  : positive := g_DATA_SYM * g_SYM_WIDTH;
-  constant c_EMPTY_WIDTH : positive := maximum(log2ceil(g_DATA_SYM), 1);
+  constant c_EMPTY_WIDTH : positive := max_int(log2ceil(g_DATA_SYM), 1);
   --! FIFO buffer width (stores data, empty, sop and eop)
   constant c_FIFO_WIDTH  : positive := c_DATA_WIDTH + c_EMPTY_WIDTH + 2;
 

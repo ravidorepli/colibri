@@ -45,9 +45,9 @@ entity simple_dpram_altera is
     --! RAM depth as number of data words of the largest port size
     g_N_WORDS      : positive := 10;
     --! RAM address A port
-    g_A_ADDR_WIDTH : positive := log2ceil(maximum(g_A_DATA_WIDTH, g_B_DATA_WIDTH) * g_N_WORDS / g_A_DATA_WIDTH);
+    g_A_ADDR_WIDTH : positive := log2ceil(max_int(g_A_DATA_WIDTH, g_B_DATA_WIDTH) * g_N_WORDS / g_A_DATA_WIDTH);
     --! RAM address B port
-    g_B_ADDR_WIDTH : positive := log2ceil(maximum(g_A_DATA_WIDTH, g_B_DATA_WIDTH) * g_N_WORDS / g_B_DATA_WIDTH);
+    g_B_ADDR_WIDTH : positive := log2ceil(max_int(g_A_DATA_WIDTH, g_B_DATA_WIDTH) * g_N_WORDS / g_B_DATA_WIDTH);
     --! Add output register to ease timing
     g_REGISTER_OUT : boolean  := false;
 
@@ -77,9 +77,9 @@ end entity simple_dpram_altera;
 architecture rtl of simple_dpram_altera is
 
   --! internal memory width
-  constant c_MEM_WIDTH  : positive := minimum(g_A_DATA_WIDTH, g_B_DATA_WIDTH);
+  constant c_MEM_WIDTH  : positive := min_int(g_A_DATA_WIDTH, g_B_DATA_WIDTH);
   --! port ratio
-  constant c_PORT_RATIO : positive := maximum(g_A_DATA_WIDTH, g_B_DATA_WIDTH) / c_MEM_WIDTH;
+  constant c_PORT_RATIO : positive := max_int(g_A_DATA_WIDTH, g_B_DATA_WIDTH) / c_MEM_WIDTH;
   --! internal memory depth
   constant c_MEM_DEPTH  : positive := g_N_WORDS * c_PORT_RATIO;
   --! Ratio between B port and memory

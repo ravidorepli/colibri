@@ -33,6 +33,11 @@ package utils is
   --! ceil(a/b)
   function div_ceil (a : time; b : time) return natural;
 
+  --! larger / smaller of two integers (the VHDL-2008 predefined maximum / minimum, which Quartus
+  --! Prime Lite / Standard do not provide)
+  function max_int (a : integer; b : integer) return integer;
+  function min_int (a : integer; b : integer) return integer;
+
   --! computes ceil(log2(arg)) and return unsigned of bits size
   function log2ceil (arg : unsigned; bits : natural) return unsigned;
 
@@ -154,6 +159,26 @@ package body utils is
     return (a + ((b - 1 fs))) / b;
 
   end function div_ceil;
+
+  function max_int (a : integer; b : integer) return integer is
+  begin
+
+    if a > b then
+      return a;
+    end if;
+    return b;
+
+  end function max_int;
+
+  function min_int (a : integer; b : integer) return integer is
+  begin
+
+    if a < b then
+      return a;
+    end if;
+    return b;
+
+  end function min_int;
 
   function log2ceil (arg : unsigned; bits : natural) return unsigned is
 

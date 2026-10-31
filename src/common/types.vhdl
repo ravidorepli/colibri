@@ -278,7 +278,7 @@ package body types is ----------------------------------------------------------
     -- an aggregate, not a record-constrained subtype (Quartus Lite / Standard reject those)
     return (
       data  => (data_width - 1 downto 0 => '0'),
-      empty => (maximum(log2ceil(data_width / symbol_width), 1) - 1 downto 0 => '0'),
+      empty => (max_int(log2ceil(data_width / symbol_width), 1) - 1 downto 0 => '0'),
       sop   => '0',
       eop   => '0',
       valid => '0'

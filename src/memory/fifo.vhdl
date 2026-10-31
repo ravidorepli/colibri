@@ -48,7 +48,7 @@ end entity fifo;
 architecture rtl of fifo is
 
   -- Width in bits of the words stored in the FIFO
-  constant c_FIFO_WIDTH : positive := maximum(g_INPUT_WIDTH, g_OUTPUT_WIDTH);
+  constant c_FIFO_WIDTH : positive := max_int(g_INPUT_WIDTH, g_OUTPUT_WIDTH);
 
   -- fifo memory storage
 

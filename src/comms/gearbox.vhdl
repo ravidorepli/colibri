@@ -46,8 +46,8 @@ end entity gearbox;
 architecture rtl of gearbox is
 
   -- Buffer size in bits (sufficiently big for optimal throughput)
-  constant c_BUF_SIZE : integer := 2 * maximum(g_OUTPUT_WIDTH, g_INPUT_WIDTH)
-    + minimum(g_OUTPUT_WIDTH, g_INPUT_WIDTH);
+  constant c_BUF_SIZE : integer := 2 * max_int(g_OUTPUT_WIDTH, g_INPUT_WIDTH)
+    + min_int(g_OUTPUT_WIDTH, g_INPUT_WIDTH);
 
   signal buf   : std_logic_vector(c_BUF_SIZE - 1 downto 0);
   signal empty : std_logic;
