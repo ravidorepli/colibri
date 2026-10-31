@@ -259,42 +259,30 @@ package body types is ----------------------------------------------------------
 
   --! initialize axis_master_t
   function axis_master_init (tdata_width: natural) return axis_master_t is
-
-    subtype axis_m_t is axis_master_t(
-    tdata(tdata_width - 1 downto 0),
-    tkeep(div_ceil(tdata_width, 8) - 1 downto 0)
-  );
-
-    variable v_axis : axis_m_t;
-
   begin
 
-    v_axis.tdata  := (others => '0');
-    v_axis.tkeep  := (others => '0');
-    v_axis.tlast  := '0';
-    v_axis.tvalid := '0';
-    return v_axis;
+    -- an aggregate, not a record-constrained subtype (Quartus Lite / Standard reject those)
+    return (
+      tdata  => (tdata_width - 1 downto 0 => '0'),
+      tkeep  => (div_ceil(tdata_width, 8) - 1 downto 0 => '0'),
+      tlast  => '0',
+      tvalid => '0'
+    );
 
   end function axis_master_init;
 
   --! initialize avst_master_t
   function avst_master_init (data_width: natural; symbol_width: positive := 8) return avst_master_t is
-
-    subtype avst_m_t is avst_master_t(
-    data(data_width - 1 downto 0),
-    empty(maximum(log2ceil(data_width / symbol_width), 1) - 1 downto 0)
-  );
-
-    variable v_avst : avst_m_t;
-
   begin
 
-    v_avst.data  := (others => '0');
-    v_avst.empty := (others => '0');
-    v_avst.sop   := '0';
-    v_avst.eop   := '0';
-    v_avst.valid := '0';
-    return v_avst;
+    -- an aggregate, not a record-constrained subtype (Quartus Lite / Standard reject those)
+    return (
+      data  => (data_width - 1 downto 0 => '0'),
+      empty => (maximum(log2ceil(data_width / symbol_width), 1) - 1 downto 0 => '0'),
+      sop   => '0',
+      eop   => '0',
+      valid => '0'
+    );
 
   end function avst_master_init;
 
