@@ -1,0 +1,36 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit pipeline_buffer_vu (pipeline_buffer(rtl)) {
+    
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+
+    assume reset_i;
+
+    -- data does not change when pipeline stalls
+    assume always (snk_valid_i = '1' and snk_ready_o = '0') |=> (snk_valid_i = '1' and snk_data_i = prev(snk_data_i));
+
+    -- data is not valid in the clock after reset
+    assume always reset_i |=> snk_valid_i = '0';
+
+
+    -- output is not valid after reset and register is empty
+    t_no_valid_after_reset: assert always reset_i |=> src_valid_o = '0' and stall = '0' and reg_valid = '0' and skid_valid = '0';
+
+    -- output does not change when backpressure is applied
+    t_out_stable_backpressure: assert always (reset_i = '0' and src_valid_o = '1' and src_ready_i = '0') |=> (src_valid_o = '1' and src_data_o = prev(src_data_o));
+
+    -- register read
+    t_reg_read : assert always (stall = '1' and src_ready_i = '1') |=> stall = '0';
+
+    -- no data shall be dropped
+    t_no_data_drop : assert always (reset_i = '0' and reg_valid = '1' and snk_ready_o = '1' and src_ready_i = '0') |=> (stall = '1' and skid_if.data = prev(snk_data_i));
+
+    -- in accepted, out is valid
+    t_valid_out : assert always (reset_i = '0' and snk_valid_i = '1' and snk_ready_o = '1') |=> src_valid_o = '1';
+    
+    -- if there is no input nor buffer, valid should be consumed
+    t_consume_reg : assert always (reset_i = '0' and snk_valid_i = '0' and skid_valid = '0' and src_ready_i = '1') |=> reg_valid = '0';
+}

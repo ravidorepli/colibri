@@ -1,0 +1,99 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+vunit avst_to_axis_vu (avst_to_axis(rtl)) {
+    
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+    -- IMPORTANT: reset_i the DUT at start!
+    assume {reset_i; not reset_i};
+    assume always (not reset_i) |=> (not reset_i);
+
+    constant c_WORD_BYTES : integer := snk_data_i'length/8;
+    
+        -- type used for packet classification
+    -- IDLE is no packet
+    -- SINGLE is a single word packet
+    -- MULTI is a multi word packet
+    type pkt_t is (IDLE, SINGLE, MULTI);
+        
+    signal s_snk_pkt : pkt_t := IDLE;
+    
+    -- PROCESS: classifies incoming packets
+    proc_snk_pkt : process (clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if reset_i = '1' then
+                s_snk_pkt <= IDLE;
+            else
+                -- if incoming data is ready and valid
+                if (snk_valid_i = '1' and snk_ready_o = '1') then
+                    -- if there is a startofpacket asserted and no endofpacket
+                    if(snk_sop_i = '1' and snk_eop_i = '0') then
+                        s_snk_pkt <= MULTI; -- multi word packet
+                    -- there is an endofpacket and no startofpacket
+                    elsif(snk_sop_i = '0' and snk_eop_i = '1') then
+                        s_snk_pkt <= IDLE; -- packet is closed, return to IDLE
+                    -- there is both start and end
+                    elsif(snk_sop_i = '1' and snk_eop_i = '1') then
+                        s_snk_pkt <= SINGLE; -- single word packet
+                    else
+                        -- in the middle of a packet
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process;
+    
+    -- packet format assumptions for input driver
+    -- the packet is a multi word packet, no sop during the packet
+    assume always (s_snk_pkt = MULTI) -> (not snk_sop_i); 
+    -- no valid or ready if there's no sop and it's not a multi word
+    assume always (not snk_sop_i and s_snk_pkt /= MULTI) -> (not snk_valid_i and not snk_ready_o);
+    
+
+    signal s_src_pkt : pkt_t := IDLE;
+    -- counter for output words
+    signal s_src_word_cnt : integer;
+
+    -- PROCESS: classifies incoming packets
+    proc_src_pkt : process (clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if reset_i = '1' then
+                s_src_pkt <= IDLE;
+            else
+                -- if incoming data is ready and valid
+                if s_src_pkt = SINGLE then
+                    s_src_pkt <= IDLE; -- packet is closed, return to IDLE
+                end if;
+                if (src_tvalid_o = '1' and src_tready_i = '1') then
+                    -- if there is a startofpacket asserted and no endofpacket
+                    if(src_tlast_o = '0') then
+                        s_src_pkt <= MULTI; -- multi word packet
+                    -- there is an endofpacket and no startofpacket
+                    elsif(s_src_pkt = MULTI and src_tlast_o = '1') then
+                        s_src_pkt <= IDLE; -- packet is closed, return to IDLE
+                    -- there is both start and end
+                    elsif(src_tlast_o = '1') then
+                        s_src_pkt <= SINGLE; -- single word packet
+                    else
+                        -- in the middle of a packet
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process;
+    
+
+    -- keep is modified only on the last word
+    assume always src_tlast_o = '0' -> (src_tkeep_o = (src_tkeep_o'range => '1'));
+
+    -- keep is correctly encoded
+    signal keep_oh : src_tkeep_o'subtype;
+    signal keep_shift : src_tkeep_o'subtype;
+    keep_shift <= ('0' & src_tkeep_o(src_tkeep_o'left downto 1));
+    keep_oh <= src_tkeep_o xor keep_shift;
+
+    t_no_one_hot : assert always (not reset_i and src_tready_i = '1' and src_tvalid_o = '1') -> onehot(keep_oh);
+    t_empty_keep : assert always (not reset_i and src_tready_i = '1' and src_tvalid_o = '1') -> src_tkeep_o /= (src_tkeep_o'range => '0');
+}

@@ -1,0 +1,280 @@
+--==================================================================================================
+--! @brief Formal verification assertions for the `avst_ram_read` component
+--!
+--! @author Mitja Vodnik <mitja.vodnik@cern.ch> (CERN - EP-LBC)
+--! @date 22-01-2026 Created
+--! @version 0.1
+--! @copyright CERN 2026
+-- SPDX-FileCopyrightText: 2026 CERN
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+--==================================================================================================
+
+vunit avst_ram_read_vu(avst_ram_read(rtl)) {
+
+    default clock is rising_edge(clk_i);
+    assume {reset_i};
+
+    ---------------------------------------------------------------------------- VHDL --------------
+
+    -- RAM output is valid 1cc after read enable is asserted
+    signal rd_valid : std_logic;
+    rd_valid <= rd_en_o and (not reset_i) when rising_edge(clk_i);
+    -- Output Avalon-ST conditions
+    signal back_pressure : std_logic;
+    back_pressure <= src_valid_o and (not src_ready_i);
+    signal handshake : std_logic;
+    handshake <= src_valid_o and src_ready_i;
+    signal sop_hs : std_logic;
+    sop_hs <= src_sop_o and handshake;
+    signal eop_hs : std_logic;
+    eop_hs <= src_eop_o and handshake;
+    signal in_flight_valid : std_logic;
+    in_flight_valid <= src_valid_o and ((not src_sop_o) or src_ready_i);
+
+    -- Reader start condition
+    signal rd_start : std_logic;
+    rd_start <= start_i and (not busy_o) and (not stop_i) and (not reset_i);
+
+    -- Counter of bytes read from RAM
+    signal rd_cnt  : length_i'subtype;
+    -- Counter of bytes streamed out
+    signal out_cnt : length_i'subtype;
+    -- Counter of in-flight data packets
+    signal pkt_cnt : integer := 0;
+
+    process (clk_i) is
+        variable v_pkt_cnt : pkt_cnt'subtype;
+    begin
+        if rising_edge(clk_i) then
+
+            if (reset_i or rd_start) then
+                rd_cnt <= (others => '0');
+            elsif (rd_en_o) then
+                rd_cnt <= rd_cnt + g_WORD_BYTES;
+            end if;
+
+            if (reset_i or eop_hs) then
+                out_cnt <= (others => '0');
+            elsif (handshake) then
+                out_cnt <= out_cnt + g_WORD_BYTES - src_empty_o;
+            end if;
+
+            v_pkt_cnt := pkt_cnt;
+            if (rd_start) then
+                v_pkt_cnt := v_pkt_cnt + 1;
+            end if;
+            if (eop_hs) then
+                if (stop_i) then
+                    v_pkt_cnt := 0;
+                else
+                    v_pkt_cnt := v_pkt_cnt - 1;
+                end if;
+            end if;
+            if (stop_i and (not in_flight_valid)) then
+                v_pkt_cnt := 0;
+            elsif (stop_i = '1' and v_pkt_cnt > 1) then
+                v_pkt_cnt := 1;
+            end if;
+            if (reset_i) then
+                v_pkt_cnt := 0;
+            end if;
+            pkt_cnt <= v_pkt_cnt;
+
+        end if;
+    end process;
+
+    attribute anyconst : boolean;
+    -- Data value to check
+    signal c_DATA : src_data_o'subtype;
+    attribute anyconst of c_DATA : signal is true;
+    -- Address value to check
+    signal c_ADDR : start_addr_i'subtype;
+    attribute anyconst of c_ADDR : signal is true;
+    -- Length value to check
+    signal c_LEN : length_i'subtype;
+    attribute anyconst of c_LEN : signal is true;
+    signal c_EMPTY : src_empty_o'subtype;
+    c_EMPTY <= g_WORD_BYTES - resize(c_LEN mod g_WORD_BYTES, src_empty_o'length);
+
+    ---------------------------------------------------------------------------- ASSERTIONS --------
+
+    -- Synchronous reset
+    property prop_reset is reset_i -> next (not busy_o) and (not src_valid_o) and (not rd_en_o);
+    reset : assert always prop_reset;
+
+    -- Reading starts 1CC after the request is made
+    property prop_read_start is (
+        rd_start = '1' and (not back_pressure) ->
+        next rd_en_o and (busy_o or prev(stop_i) or prev(length_i <= g_WORD_BYTES))
+    ) abort reset_i;
+    read_start : assert always prop_read_start;
+
+    -- Next data words are requested from RAM
+    property prop_next_word is (
+        {rd_start = '1' and length_i = c_LEN and c_LEN > g_WORD_BYTES;
+         busy_o[*]; rd_en_o = '1' and c_LEN - rd_cnt > g_WORD_BYTES and rd_addr_o = c_ADDR} |=>
+        {busy_o[*]; rd_en_o = '1' and rd_addr_o = c_ADDR + 1}
+    ) abort (reset_i or stop_i);
+    next_word : assert always prop_next_word;
+    
+    -- Address is incremented by 1 word
+    property prop_addr_incr is (
+        rd_en_o = '1' and rd_addr_o = c_ADDR -> next next_event(rd_en_o)(rd_addr_o = c_ADDR + 1)
+    ) abort (reset_i or (not busy_o));
+    addr_incr : assert always prop_addr_incr;
+
+    -- Data is presented on the output
+    property prop_data_out is (
+        {rd_en_o and (not back_pressure); rd_data_i = c_DATA and back_pressure = '0'} |=>
+        src_valid_o = '1' and src_data_o = c_DATA
+    ) abort (reset_i or stop_i);
+    data_out : assert always prop_data_out;
+
+    -- Start of output packet is marked
+    property prop_sop is (
+        rd_start and (not src_valid_o) -> next_event(src_valid_o)(src_sop_o)
+    ) abort reset_i;
+    sop : assert always prop_sop;
+
+    -- End of output packet is marked (For different numbers of initial packets in flight)
+    property prop_eop_0 is (
+        rd_start = '1' and length_i = c_LEN and c_LEN /= 0 and
+        ((pkt_cnt = 0 and eop_hs = '0') or (pkt_cnt = 1 and eop_hs = '1')) ->
+        next next_event(src_valid_o = '1' and c_LEN - out_cnt <= g_WORD_BYTES)(src_eop_o)
+    ) abort (reset_i or stop_i);
+    eop_0 : assert always prop_eop_0;
+    property prop_eop_1 is (
+        {rd_start = '1' and length_i = c_LEN and c_LEN /= 0 and
+        ((pkt_cnt = 1 and eop_hs = '0') or (pkt_cnt = 2 and eop_hs = '1'));
+        (not eop_hs)[*]; eop_hs} |=>
+        next_event(src_valid_o = '1' and c_LEN - out_cnt <= g_WORD_BYTES)(src_eop_o)
+    ) abort (reset_i or stop_i);
+    eop_1 : assert always prop_eop_1;
+    property prop_eop_2 is (
+        {{rd_start = '1' and length_i = c_LEN and c_LEN /= 0 and
+        ((pkt_cnt = 2 and eop_hs = '0') or (pkt_cnt = 3 and eop_hs = '1'))};
+        {(not eop_hs)[*]; eop_hs}[*2]} |=>
+        next_event(src_valid_o = '1' and c_LEN - out_cnt <= g_WORD_BYTES)(src_eop_o)
+    ) abort (reset_i or stop_i);
+    eop_2 : assert always prop_eop_2;
+    property prop_eop_3 is (
+        {{rd_start = '1' and length_i = c_LEN and c_LEN /= 0 and
+        ((pkt_cnt = 3 and eop_hs = '0') or (pkt_cnt = 4 and eop_hs = '1'))};
+        {(not eop_hs)[*]; eop_hs}[*3]} |=>
+        next_event(src_valid_o = '1' and c_LEN - out_cnt <= g_WORD_BYTES)(src_eop_o)
+    ) abort (reset_i or stop_i);
+    eop_3 : assert always prop_eop_3;
+    -- There is never more than 3 packets in flight (the component becomes busy)
+    block_at_4_inflight : assert always pkt_cnt = 4 -> src_eop_o and src_valid_o and busy_o;
+    inflight_limit : assert always pkt_cnt < 5;
+
+    -- SoP and EoP are asserted only on valid output beats
+    sop_eop_valid : assert always src_eop_o or src_sop_o -> src_valid_o;
+
+    -- End of output packet is marked, when `stop_i` is asserted
+    property prop_stop_eop is (
+        stop_i and in_flight_valid and (not eop_hs) -> next next_event(handshake)(src_eop_o)
+    ) abort reset_i;
+    stop_eop : assert always prop_stop_eop;
+
+    -- SoP is asserted on 1st output beat only
+    property prop_sop_1beat is (
+        sop_hs and (not src_eop_o) -> next ((not src_sop_o) until_ (eop_hs))
+    ) abort reset_i;
+    sop_1beat : assert always prop_sop_1beat;
+
+    -- Empty is only non-zero during EoP
+    empty_eop : assert always (or src_empty_o) -> src_eop_o;
+    -- Empty value is set correctly (For different numbers of initial packets in flight)
+    property prop_empty_0 is (
+        rd_start = '1' and length_i = c_LEN and c_LEN /= 0 and
+        ((pkt_cnt = 0 and eop_hs = '0') or (pkt_cnt = 1 and eop_hs = '1')) ->
+        next next_event(src_eop_o)(src_empty_o = c_EMPTY)
+    ) abort (reset_i or stop_i);
+    empty_0 : assert always prop_empty_0;
+    property prop_empty_1 is (
+        {rd_start = '1' and length_i = c_LEN and c_LEN /= 0 and
+        ((pkt_cnt = 1 and eop_hs = '0') or (pkt_cnt = 2 and eop_hs = '1'));
+        (not eop_hs)[*]; eop_hs} |=>
+        next_event(src_eop_o)(src_empty_o = c_EMPTY)
+    ) abort (reset_i or stop_i);
+    empty_1 : assert always prop_empty_1;
+    property prop_empty_2 is (
+        {{rd_start = '1' and length_i = c_LEN and c_LEN /= 0 and
+        ((pkt_cnt = 2 and eop_hs = '0') or (pkt_cnt = 3 and eop_hs = '1'))};
+        {(not eop_hs)[*]; eop_hs}[*2]} |=>
+        next_event(src_eop_o)(src_empty_o = c_EMPTY)
+    ) abort (reset_i or stop_i);
+    empty_2 : assert always prop_empty_2;
+    property prop_empty_3 is (
+        {{rd_start = '1' and length_i = c_LEN and c_LEN /= 0 and
+        ((pkt_cnt = 3 and eop_hs = '0') or (pkt_cnt = 4 and eop_hs = '1'))};
+        {(not eop_hs)[*]; eop_hs}[*3]} |=>
+        next_event(src_eop_o)(src_empty_o = c_EMPTY)
+    ) abort (reset_i or stop_i);
+    empty_3 : assert always prop_empty_3;
+
+    -- Output persists when not ready (except if the SoP can be thrown away)
+    property prop_output_hold is (
+        back_pressure and (not src_sop_o) -> next stable(src_data_o) and stable(src_valid_o)
+        and stable(src_sop_o) and (stable(src_eop_o) or prev(stop_i)) and stable(src_empty_o)
+    ) abort reset_i;
+    output_hold : assert always prop_output_hold;
+
+    -- The full configured length is read
+    property prop_read_length is (
+        rd_start = '1' and length_i = c_LEN ->
+        next (busy_o until (rd_en_o = '1' and c_LEN - rd_cnt <= g_WORD_BYTES))
+    ) abort (reset_i or stop_i);
+    read_length : assert always prop_read_length;
+
+    -- The reading stops automatically
+    property prop_auto_stop is (
+        rd_start = '1' and length_i = c_LEN and c_LEN /= 0 ->
+        next_event(rd_en_o = '1' and c_LEN - rd_cnt <= g_WORD_BYTES)(not busy_o)
+    ) abort (reset_i or stop_i);
+    auto_stop : assert always prop_auto_stop;
+
+    -- Zero-length results in a continuous stream
+    property prop_continuous is (
+        rd_start = '1' and length_i = 0 -> next (busy_o until_ stop_i)
+    ) abort reset_i;
+    continuous : assert always prop_continuous;
+
+    -- Reading can be stopped prematurely
+    property prop_stop is stop_i -> next (not busy_o);
+    stop : assert always prop_stop;
+
+    ---------------------------------------------------------------------------- COVER -------------
+
+    word_cnt_wrap : cover {{and r.word_cnt = '1'; r.word_cnt = 0; [*]; r.word_cnt = 3} & {busy_o}};
+
+    ---------------------------------------------------------------------------- DEBUG -------------
+
+    attribute keep : boolean;
+
+    signal dbg_rd_eop : std_logic;
+    attribute keep of dbg_rd_eop : signal is true;
+    dbg_rd_eop <= r.avst_pipe(0).eop;
+
+    signal dbg_eop : std_logic;
+    attribute keep of dbg_eop : signal is true;
+    dbg_eop <= r.avst_pipe(1).eop;
+
+    signal dbg_rd_valid : std_logic;
+    attribute keep of dbg_rd_valid : signal is true;
+    dbg_rd_valid <= r.avst_pipe(0).valid;
+
+    signal dbg_valid : std_logic;
+    attribute keep of dbg_valid : signal is true;
+    dbg_valid <= r.avst_pipe(1).valid;
+
+    signal dbg_data : src_data_o'subtype;
+    attribute keep of dbg_data : signal is true;
+    dbg_data <= r.avst_pipe(1).data;
+
+    signal dbg_word_cnt : r.word_cnt'subtype;
+    attribute keep of dbg_word_cnt : signal is true;
+    dbg_word_cnt <= r.word_cnt;
+
+} --------------------------------------------------------------------------------------------------

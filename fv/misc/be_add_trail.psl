@@ -1,0 +1,108 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit be_add_trail_vu (be_add_trail(rtl)) {
+    
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+    
+    -- IMPORTANT: reset_i the DUT at start!
+    assume reset_i;
+
+
+    constant c_WORD_BYTES : integer := src_data_o'length/8;
+    
+    -- type used for packet classification
+    -- IDLE is no packet
+    -- SINGLE is a single word packet
+    -- MULTI is a multi word packet
+    type pkt_t is (IDLE, SINGLE, MULTI);
+        
+    signal s_snk_pkt : pkt_t := IDLE;
+    
+    -- PROCESS: classifies incoming packets
+    proc_snk_pkt : process (clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if reset_i = '1' then
+                s_snk_pkt <= IDLE;
+            else
+                -- if incoming data is ready and valid
+                if (snk_valid_i = '1' and snk_ready_o = '1') then
+                    -- if there is a startofpacket asserted and no endofpacket
+                    if(snk_sop_i = '1' and snk_eop_i = '0') then
+                        s_snk_pkt <= MULTI; -- multi word packet
+                    -- there is an endofpacket and no startofpacket
+                    elsif(snk_sop_i = '0' and snk_eop_i = '1') then
+                        s_snk_pkt <= IDLE; -- packet is closed, return to IDLE
+                    -- there is both start and end
+                    elsif(snk_sop_i = '1' and snk_eop_i = '1') then
+                        s_snk_pkt <= SINGLE; -- single word packet
+                    else
+                        -- in the middle of a packet
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process;
+    
+    -- packet format assumptions for input driver
+    -- the packet is a multi word packet, no sop during the packet
+    assume always (s_snk_pkt = MULTI) -> (not snk_sop_i); 
+    -- no valid or ready if there's no sop and it's not a multi word
+    assume always (not snk_sop_i and s_snk_pkt /= MULTI) -> (not snk_valid_i and not snk_ready_o);
+    
+    
+    signal s_src_pkt : pkt_t := IDLE;
+    -- counter for output words
+    signal s_src_word_cnt : integer;
+    
+    --PROCESS: Classify output packets
+    p_src_pkt : process (clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if reset_i = '1' then
+                s_src_pkt <= IDLE;
+                s_src_word_cnt <= 0;
+            else
+                -- if output data is ready and valid
+                if (src_valid_o = '1' and src_ready_i = '1') then
+                    -- if there is a startofpacket asserted and no endofpacket
+                    s_src_word_cnt <= s_src_word_cnt +1;
+                    if(src_sop_o = '1' and src_eop_o = '0') then
+                        s_src_pkt <= MULTI; -- multi word packet
+                    -- there is an endofpacket and no startofpacket
+                    elsif(src_sop_o = '0' and src_eop_o = '1') then
+                        s_src_pkt <= IDLE; -- packet is closed, return to IDLE
+                    -- there is both start and end
+                    elsif(src_sop_o = '1' and src_eop_o = '1') then
+                        s_src_pkt <= SINGLE; -- single word packet
+                        s_src_word_cnt <= 0;
+                    else
+                        -- in the middle of a packet
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process;
+    
+    -- TESTS on output packets
+    -- if the out is IDLE and src is ready and valid, a sop must be present
+    t_valid_out_sop : assert always (not reset_i and s_src_pkt = IDLE and src_ready_i and src_valid_o) -> (src_sop_o);
+    -- if the out is a MULTI word and src is ready and valid, a sop must NOT be present
+    t_valid_out_multi : assert always (not reset_i  and s_src_pkt = MULTI and src_ready_i and src_valid_o) -> (not src_sop_o);
+    -- if there is sop eop ready and valid, the out must be a single packet (on the next clock)
+    c_valid_out_single : cover {not reset_i and src_ready_i and src_valid_o and src_sop_o and src_eop_o};
+    
+    -- EMPTY tests
+    -- check if empty is valid
+    t_empty_out : assert always (not reset_i and src_eop_o and src_ready_i and src_valid_o) -> (to_integer(src_empty_o) < c_WORD_BYTES);
+    
+
+    -- BE_ADD_trail specifics
+    -- to simplify verification
+    assume always snk_trail_i = 32x"AAAAAAAA";
+    assume always snk_data_i = (snk_data_i'range => '0');
+    assume always (to_integer(shl_i) <= c_WORD_BYTES);
+    }

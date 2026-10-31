@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 CERN
+# SPDX-License-Identifier: Apache-2.0
+
+version: '1.0.0'
+name: 'colibri VHDL library'
+description: 'https://gitlab.com/colibri-cern/colibri/-/raw/master/readme.md'
+website: 'https://gitlab.com/colibri-cern/colibri'
+licenses: ['CERN-OHL-W-2.0+', 'CC-BY-SA-4.0+']
+images:
+  - 'https://gitlab.com/colibri-cern/colibri/-/raw/master/docs/logo/vertical/colibri_vertical_dark.png'
+documentation: 'https://colibri.docs.cern.ch'
+issues: 'https://gitlab.com/colibri-cern/colibri/-/work_items'
+latest_release: 'https://gitlab.com/colibri-cern/colibri/-/releases'
+#forum: 'https://forums.ohwr.org/c/colibri'
+newsfeed: 'https://gitlab.com/colibri-cern/colibri/-/raw/master/changelog.md'
+links:
+  - name: 'Matrix Chat Room'
+    url: 'https://matrix.to/#/#colibri-users:matrix.org'

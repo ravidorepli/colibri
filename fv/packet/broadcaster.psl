@@ -1,0 +1,94 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+vunit broadcaster_vu (broadcaster(rtl)) {
+
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+
+-- reset the DUT
+    assume {reset_i};
+    type pkt_t is (IDLE, SINGLE, MULTI);
+
+    constant c_NUM_SRC : natural := 3;
+
+    type pkt_arr_t is array (0 to c_NUM_SRC -1) of pkt_t;
+    
+    signal srcs_pkt : pkt_t;
+
+    proc_snk_pkt : process (clk_i)
+    begin
+        if rising_edge(clk_i) then
+                if reset_i = '1' then
+                    srcs_pkt <= IDLE;
+                else
+                        -- if incoming data is ready and valid
+                        if (snk_valid_i = '1' and snk_ready_o  = '1') then
+                            -- if there is a startofpacket asserted and no endofpacket
+                            if(snk_sop_i  = '1' and snk_eop_i  = '0') then
+                                srcs_pkt <= MULTI; -- multi word packet
+                            -- there is an endofpacket and no startofpacket
+                            elsif(snk_sop_i  = '0' and snk_eop_i  = '1') then
+                                srcs_pkt  <= IDLE; -- packet is closed, return to IDLE
+                            -- there is both start and end
+                            elsif(snk_sop_i  = '1' and snk_eop_i  = '1') then
+                                srcs_pkt  <= SINGLE; -- single word packet
+                            else
+                                -- in the middle of a packet
+                            end if;
+                        end if;
+                end if;
+        end if;
+    end process;
+
+    -- packet format assumptions for input driver
+    -- the packet is a multi word packet, no sop during the packet
+
+    assume always (srcs_pkt = MULTI) -> (not snk_sop_i);
+
+    -- no valid or ready if there's no sop and it's not a multi word
+    assume always (not snk_sop_i and srcs_pkt /= MULTI  ) -> (not snk_valid_i and not snk_ready_o);
+
+    signal snks_arr : pkt_arr_t;
+
+    proc_src_pkt : process (clk_i)
+    begin
+        if rising_edge(clk_i) then
+            for i in 0 to c_NUM_SRC -1 loop
+                if reset_i = '1' then
+                    snks_arr(i) <= IDLE;
+                else
+                    -- if incoming data is ready and valid
+                    if (src_valid_o(i) = '1' and src_ready_i(i)  = '1') then
+                        -- if there is a startofpacket asserted and no endofpacket
+                        if(src_sop_o(i)  = '1' and src_eop_o(i)  = '0') then
+                            snks_arr(i) <= MULTI; -- multi word packet
+                        -- there is an endofpacket and no startofpacket
+                        elsif(src_sop_o(i)  = '0' and src_eop_o(i)  = '1') then
+                            snks_arr(i) <= IDLE; -- packet is closed, return to IDLE
+                        -- there is both start and end
+                        elsif(src_sop_o(i)  = '1' and src_eop_o(i)  = '1') then
+                            snks_arr(i) <= SINGLE; -- single word packet
+                        else
+                            -- in the middle of a packet
+                        end if;
+                    end if;
+                end if;
+            end loop;
+        end if;
+    end process;
+    -- TESTS on output packets
+    -- if the out is IDLE and src is ready and valid, a sop must be present
+    t_valid_out_sop0 : assert always (not reset_i and snks_arr(0) = IDLE and src_ready_i(0) and src_valid_o(0)) -> (src_sop_o(0));
+    t_valid_out_sop1 : assert always (not reset_i and snks_arr(1) = IDLE and src_ready_i(1) and src_valid_o(1)) -> (src_sop_o(1));
+    t_valid_out_sop2 : assert always (not reset_i and snks_arr(2) = IDLE and src_ready_i(2) and src_valid_o(2)) -> (src_sop_o(2));
+    -- if the out is a MULTI word and src is ready and valid, a sop must NOT be present
+    t_valid_out_multi0 : assert always (not reset_i  and snks_arr(0) = MULTI  and src_ready_i(0) and src_valid_o(0)) -> (not src_sop_o(0));
+    t_valid_out_multi1 : assert always (not reset_i  and snks_arr(1) = MULTI  and src_ready_i(1) and src_valid_o(1)) -> (not src_sop_o(1));
+    t_valid_out_multi2 : assert always (not reset_i  and snks_arr(2) = MULTI  and src_ready_i(2) and src_valid_o(2)) -> (not src_sop_o(2));
+    -- if there is sop eop ready and valid, the out must be a single packet (on the next clock)
+    c_valid_out_single0 : cover {(src_ready_i(0) and src_valid_o(0) and src_sop_o(0) and src_eop_o(0))} ;
+    c_valid_out_single1 : cover {(src_ready_i(1) and src_valid_o(1) and src_sop_o(1) and src_eop_o(1))} ;
+    c_valid_out_single2 : cover {(src_ready_i(2) and src_valid_o(2) and src_sop_o(2) and src_eop_o(2))} ;
+
+    }

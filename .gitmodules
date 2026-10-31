@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 CERN
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
+[submodule "UVVM"]
+	path = UVVM
+	url = https://gitlab.cern.ch/colibri/UVVM.git
+[submodule "vhdl_style_guide"]
+	path = vhdl_style_guide
+	url = https://gitlab.cern.ch/colibri/vhdl_style_guide.git

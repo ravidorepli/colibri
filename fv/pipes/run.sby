@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: 2026 CERN
+#
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
+# ------------------------------------------------------------------------------------ TASKS -------
+[tasks]
+--pycode-begin--
+for name in [ # -------------- List all components to PROVE --------------------
+    'arbiter'
+    ]:
+    output(f"{name}_prove prove name_tag_{name}")
+
+for name in [ # -------------- List all components for BMC ---------------------
+    'arbiter'
+    ]:
+    output(f"{name}_bmc bmc name_tag_{name}")
+
+for name in [ # -------------- List all components to COVER --------------------
+    'arbiter'
+    ]:
+    output(f"{name}_cover cover name_tag_{name}")
+--pycode-end--
+
+# ----------------------------------------------------------------------------------- OPTIONS ------
+[options]
+depth 20
+prove: mode prove
+bmc: mode bmc
+cover: mode cover
+
+# ----------------------------------------------------------------------------------- ENGINES ------
+[engines]
+prove: abc pdr
+cover: smtbmc
+bmc: btor btormc
+
+# ------------------------------------------------------------------------------------ SCRIPT ------
+[script]
+--pycode-begin--
+for tag in tags:
+    # Generates build scripts for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+
+        add_files = 'utils.vhdl'
+
+        output(f"{tag}: ghdl --std=08 --work=colibri {add_files} {name}.vhdl {name}.psl -e {name}")
+        output(f"{tag}: prep -top {name}")
+--pycode-end--
+
+# ------------------------------------------------------------------------------------ FILES -------
+[files]
+../../src/common/utils.vhdl
+
+--pycode-begin--
+for tag in tags:
+    # Includes source files for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+        
+        output(f"../../src/pipes/{name}.vhdl")
+        output(f"{name}.psl")
+--pycode-end--
+

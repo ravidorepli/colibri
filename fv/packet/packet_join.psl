@@ -1,0 +1,166 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit packet_join_vu(packet_join) {
+
+    default clock is rising_edge(clk_i);
+    assume {reset_i};
+
+    ---------------------------------------------------------------------------- VHDL --------------
+    -- Start and End of Packet HandShake indicators
+    signal snk_eop_hs : std_logic;
+    snk_eop_hs <= snk_eop_i and snk_valid_i and snk_ready_o;
+    signal snk_sop_hs : std_logic;
+    snk_sop_hs <= snk_sop_i and snk_valid_i and snk_ready_o;
+    signal src_eop_hs : std_logic;
+    src_eop_hs <= src_eop_o and src_valid_o and src_ready_i;
+    
+    -- Registered signals
+    type reg_t is record
+        in_cnt  : integer range 0 to 255;
+        out_cnt : integer range 0 to 255;
+        first   : std_logic;
+        last    : std_logic;
+    end record;
+    -- Initial registered values
+    constant c_REG_INIT : reg_t := (
+        in_cnt  => 0,
+        out_cnt => 0,
+        first   => '1',
+        last    => '0'
+    );
+
+    -- Register input and current value
+    signal rin, r : reg_t := c_REG_INIT;
+    r <= rin when rising_edge(clk_i);
+
+    -- Combinatorial logic -----------------------------------------------------
+    process (all) is
+        variable v : reg_t;
+    begin ----------------------------------------------------------------------
+        v := r;
+
+        if (last_i) then
+            v.last := '1';
+        end if;
+
+        -- Input symbol counter --------------------------------------------
+        if (snk_valid_i and snk_ready_o) then
+            if (snk_sop_i = '1') then
+                if (r.first) then
+                    v.in_cnt := g_DATA_SYM - to_integer(snk_empty_i);
+                    v.first  := '0';
+                else
+                    v.in_cnt := r.in_cnt + g_DATA_SYM - to_integer(snk_empty_i);
+                end if;
+            else
+                v.in_cnt := r.in_cnt + g_DATA_SYM - to_integer(snk_empty_i);
+            end if;
+            if (snk_eop_i) then
+                if (v.last) then
+                    v.first := '1';
+                end if;
+                v.last := '0';
+            end if;
+        end if;
+
+        -- Output symbol counter ---------------------------------------------
+        if (src_valid_o and src_ready_i) then
+            if (src_sop_o) then
+                v.out_cnt := g_DATA_SYM - to_integer(src_empty_o);
+            else
+                v.out_cnt := r.out_cnt + g_DATA_SYM - to_integer(src_empty_o);
+            end if;
+        end if;
+
+        if (reset_i) then ----------------------------------------------------
+            v := c_REG_INIT;
+        end if;
+        rin <= v;
+    end process; ---------------------------------------------------------------
+
+    -- Output packet length (in terms of symbols) to check
+    attribute anyconst : boolean;
+    signal c_SYM_CNT : positive;
+    attribute anyconst of c_SYM_CNT : signal is true;
+
+    -- Maximum number of input (and therefore output) symbols
+    constant c_MAX_IN_CNT : positive := g_DATA_SYM * 3;
+
+    ---------------------------------------------------------------------------- ASSUMPTIONS -------
+
+    -- Limit the input (and therefore output) length
+    assume always r.in_cnt  < c_MAX_IN_CNT;
+    assume always c_SYM_CNT < c_MAX_IN_CNT;
+
+    -- Input remains stable while not ready
+    assume always (not snk_ready_o) and snk_valid_i -> next snk_valid_i
+        and (snk_data_i = prev(snk_data_i)) and (snk_empty_i = prev(snk_empty_i))
+        and (snk_sop_i = prev(snk_sop_i))   and (snk_eop_i = prev(snk_eop_i));
+
+    -- Empty is only set at the end of packet
+    assume always or snk_empty_i -> snk_eop_i;
+
+    -- First input packet starts with a SoP asserted
+    assume always fell(reset_i) -> next_event(snk_valid_i)(snk_sop_i);
+
+    -- Every next input packet starts with an SoP
+    assume always snk_eop_i -> next next_event(snk_valid_i)(snk_sop_i);
+
+    -- An input packet should end before the next one starts
+    assume always snk_sop_hs and (not snk_eop_i) -> next ((snk_eop_hs) before snk_sop_i);
+
+    ---------------------------------------------------------------------------- ASSERTIONS --------
+
+    -- Synchronous reset
+    property prop_reset is reset_i -> next (not src_valid_o) and (not snk_ready_o);
+    reset : assert always prop_reset;
+
+    -- Input ready goes up after reset
+    property prop_ready_init is fell(reset_i) -> next snk_ready_o;
+    ready_init : assert always prop_ready_init;
+    
+    -- Output remains stable during backpressure
+    property prop_out_stable is (
+        (not src_ready_i) and src_valid_o -> next src_valid_o
+        and (src_data_o = prev(src_data_o)) and (src_empty_o = prev(src_empty_o))
+        and (src_sop_o = prev(src_sop_o))   and (src_eop_o = prev(src_eop_o))
+    ) abort reset_i;
+    out_stable : assert always prop_out_stable;
+
+    -- Empty is only set at EoP
+    property prop_empty_at_eop_only is or src_empty_o -> src_eop_o;
+    empty_at_eop_only : assert always prop_empty_at_eop_only;
+
+    -- First output packet starts with a SoP asserted
+    property prop_first_sop is (
+        fell(reset_i) -> next_event(src_valid_o)(src_sop_o)
+    ) abort reset_i;
+    first_sop : assert always prop_first_sop;
+
+    -- Every next output packet starts with a SoP asserted
+    property prop_next_sop is (
+        fell(src_eop_o) -> next_event(src_valid_o)(src_sop_o)
+    ) abort reset_i;
+    next_sop : assert always prop_next_sop;
+
+    -- First input packet causes a start of the output packet
+    property prop_out_sop is (
+        r.first and snk_sop_hs and (not src_valid_o) -> next_event(src_valid_o)(src_sop_o)
+    ) abort reset_i;
+    out_sop : assert always prop_out_sop;
+
+    -- Number of output symbols is the same as the number of input symbols
+    property prop_out_cnt is (
+        {last_i and snk_sop_hs and (not snk_eop_i) and (not src_valid_o);
+        snk_eop_hs[->1]; r.in_cnt=c_SYM_CNT} |-> {src_eop_hs[->1]; r.out_cnt=c_SYM_CNT}
+    ) abort reset_i;
+    out_cnt : assert always prop_out_cnt;
+    property prop_out_cnt_1cc is (
+        {last_i and snk_sop_hs and snk_eop_i and (not src_valid_o);
+        r.in_cnt=c_SYM_CNT} |-> {src_eop_hs[->1]; r.out_cnt=c_SYM_CNT}
+    ) abort reset_i;
+    out_cnt_1cc : assert always prop_out_cnt_1cc;
+
+} --------------------------------------------------------------------------------------------------

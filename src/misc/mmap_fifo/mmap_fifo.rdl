@@ -1,0 +1,11 @@
+`include "mmap_fifo_rx.rdl"
+`include "mmap_fifo_tx.rdl"
+//==============================================================================================
+//                                  TOP Level Registers
+//==============================================================================================
+addrmap mmap_fifo_csr {
+    name = "Memory Mapped FIFO Stream Interface";
+    desc = "Control and Status Registers to handle the Memory Mapped FIFO component operation";
+    external txfifo_csr tx;
+    external rxfifo_csr rx;
+};

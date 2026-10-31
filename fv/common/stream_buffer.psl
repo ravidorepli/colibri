@@ -1,0 +1,51 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+--! @file stream_buffer.psl
+--! @brief PSL Assertions for Stream Buffer Formal Verification
+--! @author Alberto Perro
+--! @date 30-04-2026 Updated
+--! @version 1.0
+--! @copyright CERN 2026
+--==================================================================================================
+
+--==================================================================================================
+--! @brief PSL Verification Unit for stream_buffer
+--! @details
+--! This unit implements:
+--! SAFETY: reset, valid, counter overflow.
+--! LIVENESS: data must be valid at some point.
+--! COVER: check for circular buffer overflow.
+--==================================================================================================
+
+vunit stream_buffer_vu (stream_buffer(rtl)) {
+
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+
+    assume reset_i;
+
+-- SAFETY: Reset Behavior
+-- After reset is released, the component must be ready.
+  property p_reset_state is
+    always {reset_i} |=> {snk_ready_o = '1'};
+  t_reset_state: assert p_reset_state;
+
+-- SAFETY: Buffer is not overwritten
+  property p_buffer_stable is 
+    always ({snk_ready_o = '0'} |=> stable(skid_data)) abort reset_i;
+  t_buffer_stable : assert p_buffer_stable;
+
+-- LIVENESS: Data must eventually pass through
+  property p_data_pass is
+    always ({snk_valid_i} |-> eventually!{src_valid_o}) abort reset_i;
+  t_data_pass : assert p_data_pass;
+
+-- COVERAGE:
+  c_normal : cover {snk_valid_i = '1' and src_ready_i = '1' and src_valid_o = '1' and snk_ready_o = '1'};
+  c_backpressure_register : cover {snk_valid_i = '1' and src_ready_i = '0' and src_valid_o = '1' and snk_ready_o = '1'};
+  c_backpressure_propagate : cover {snk_valid_i = '1' and src_ready_i = '0' and snk_ready_o = '0'};
+  c_backpressure_clear : cover {snk_valid_i = '1' and src_ready_i = '1' and src_valid_o = '1' and snk_ready_o = '0'};
+    
+}

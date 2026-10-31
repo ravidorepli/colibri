@@ -1,0 +1,100 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit packet_delay_vu(packet_delay) {
+
+    default clock is rising_edge(clk_i);
+    assume {reset_i};
+
+    ---------------------------------------------------------------------------- VHDL --------------
+
+    attribute anyconst : boolean;
+    signal c_DELAY : natural;
+    attribute anyconst of c_DELAY : signal is true;
+
+    signal delay_cnt : delay_i'subtype;
+    signal delay_rst : std_logic := '1';
+
+    process (clk_i) is
+    begin
+        if rising_edge(clk_i) then
+            if (reset_i) then
+                delay_rst <= '1';
+            elsif (snk_sop_i and snk_valid_i and snk_ready_o) then
+                delay_rst <= '0';
+            end if;
+        end if;
+    end process;
+
+    u_counter : entity work.counter
+    generic map (
+        g_COUNTER_WIDTH => g_DELAY_WIDTH
+    )
+    port map (
+        clk_i        => clk_i,
+        reset_i      => delay_rst,
+        enable_i     => '1',
+        value_o      => delay_cnt,
+        wraparound_o => open
+    );
+
+    ---------------------------------------------------------------------------- ASSUMPTIONS -------
+    -- Input remains stable while not ready
+    assume always (not snk_ready_o) and snk_valid_i -> next snk_valid_i
+        and (snk_data_i = prev(snk_data_i)) and (snk_empty_i = prev(snk_empty_i))
+        and (snk_sop_i = prev(snk_sop_i))   and (snk_eop_i = prev(snk_eop_i));
+
+    -- First input packet starts with a SoP asserted
+    assume always fell(reset_i) -> next_event(snk_valid_i)(snk_sop_i);
+
+    -- Every next input packet starts with an SoP
+    assume always snk_eop_i -> next next_event(snk_valid_i)(snk_sop_i);
+
+    -- An input packet should end before the next one starts
+    assume always snk_sop_i and snk_valid_i and snk_ready_o and (not snk_eop_i) ->
+        next ((snk_eop_i and snk_valid_i and snk_ready_o) before snk_sop_i);
+
+    -- Assume constant delay configuration
+    assume always delay_i = c_DELAY;
+
+    ---------------------------------------------------------------------------- ASSERTIONS --------
+
+    -- Synchronous reset
+    property prop_reset is reset_i -> next (not src_valid_o);
+    reset : assert always prop_reset;
+    property prop_ready_mask is reset_i -> (not snk_ready_o);
+    ready_mask : assert always prop_ready_mask;
+
+    -- Input ready goes up after reset
+    property prop_ready_init is fell(reset_i) -> snk_ready_o;
+    ready_init : assert always prop_ready_init;
+    
+    -- Output remains stable during backpressure
+    property prop_out_stable is (
+        (not src_ready_i) and src_valid_o -> next src_valid_o
+        and (src_data_o = prev(src_data_o)) and (src_empty_o = prev(src_empty_o))
+        and (src_sop_o = prev(src_sop_o))   and (src_eop_o = prev(src_eop_o))
+    ) abort reset_i;
+    out_stable : assert always prop_out_stable;
+
+    -- First output packet starts with a SoP asserted
+    property prop_first_sop is (
+        fell(reset_i) -> next_event(src_valid_o)(src_sop_o)
+    ) abort reset_i;
+    first_sop : assert always prop_first_sop;
+
+    -- Every next output packet starts with a SoP asserted
+    property prop_next_sop is (
+        fell(src_eop_o) -> next_event(src_valid_o)(src_sop_o)
+    ) abort reset_i;
+    next_sop : assert always prop_next_sop;
+
+    -- Packet gets delayed by the configured amount
+    property prop_delay is (
+        {fell(reset_i) and snk_sop_i = '0'; (not snk_sop_i)[+]; snk_sop_i and snk_valid_i and snk_ready_o} |->
+        next_event(src_valid_o = '1' and src_sop_o = '1')(delay_cnt = c_DELAY)
+    ) abort reset_i;
+    delay : assert always prop_delay;
+
+} --------------------------------------------------------------------------------------------------

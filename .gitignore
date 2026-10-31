@@ -1,0 +1,15 @@
+## SPDX-FileCopyrightText: 2026 CERN
+## SPDX-License-Identifier: CERN-OHL-W-2.0
+**/.venv
+**/vunit_out
+**/*_history
+**/_*.txt
+**/*.fst
+**/scratch
+report.xml
+**/*.sqlite
+**/*.bin
+**/*.hex
+*.json
+**/doxy_out
+**/__pycache__

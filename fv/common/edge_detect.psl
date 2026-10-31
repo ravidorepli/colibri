@@ -1,0 +1,25 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit edge_detect_vu (edge_detect(rtl)) {
+
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+    
+    -- check that previous value is valid for stable and prev commands
+    signal prev_valid : boolean := false;
+    process (clk_i)
+    begin
+        if rising_edge(clk_i) then
+            prev_valid <= true;
+        end if;
+    end process;
+
+--! assert pulsed edge
+    t_valid_pulse : assert always {data_i = g_RESET_VAL;data_i /= g_RESET_VAL} |-> pulse_o /= g_RESET_VAL;
+--! non pulsed edge
+    t_no_pulse_edge : assert always {data_i /= g_RESET_VAL;data_i = g_RESET_VAL} |-> pulse_o = g_RESET_VAL;
+--! no pulse when signal is stable
+    t_no_pulse_stable : assert always (prev_valid = true and stable(data_i)) |-> pulse_o = g_RESET_VAL;
+    }

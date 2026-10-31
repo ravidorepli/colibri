@@ -1,0 +1,77 @@
+# SPDX-FileCopyrightText: 2026 CERN
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+# ------------------------------------------------------------------------------------ TASKS -------
+[tasks]
+--pycode-begin--
+for name in [ # -------------- List all components to PROVE --------------------
+    'avst_to_axis',
+    'axis_to_avst',
+    'avst_ram_write_unaligned',
+    'avst_ram_write',
+    # 'avst_ram_read'
+    ]:
+    output(f"{name}_prove prove name_tag_{name}")
+
+for name in [ # -------------- List all components for BMC ---------------------
+    'avst_to_axis',
+    'axis_to_avst',
+    'avst_ram_read'
+    ]:
+    output(f"{name}_bmc bmc name_tag_{name}")
+
+for name in [ # -------------- List all components to COVER --------------------
+    'avst_to_axis',
+    'axis_to_avst',
+    'avst_ram_write_unaligned',
+    'avst_ram_write',
+    'avst_ram_read'
+    ]:
+    output(f"{name}_cover cover name_tag_{name}")
+--pycode-end--
+
+# ----------------------------------------------------------------------------------- OPTIONS ------
+[options]
+depth 15
+prove: mode prove
+bmc: mode bmc
+cover: mode cover
+
+# ----------------------------------------------------------------------------------- ENGINES ------
+[engines]
+bmc: btor pono
+cover: smtbmc
+prove: aiger suprove
+
+# ------------------------------------------------------------------------------------ SCRIPT ------
+[script]
+--pycode-begin--
+for tag in tags:
+    # Generates build scripts for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+
+        # Set any specific generics, additional files, top entity name ... -----
+        generics = ''
+        add_files = 'utils.vhdl types.vhdl'
+        if name == 'avst_ram_read':
+            generics = '-gg_BYTE_WIDTH=2 -gg_WORD_BYTES=4 -gg_RAM_DEPTH=3'
+
+        output(f"{tag}: ghdl --std=08 {generics} --work=colibri {add_files} {name}.vhdl {name}.psl -e {name}")
+        output(f"{tag}: prep -top {name}")
+--pycode-end--
+
+# ------------------------------------------------------------------------------------ FILES -------
+[files]
+../../../src/common/utils.vhdl
+../../../src/common/types.vhdl
+
+--pycode-begin--
+for tag in tags:
+    # Includes source files for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+        
+        output(f"../../../src/interfaces/stream/{name}.vhdl")
+        output(f"{name}.psl")
+--pycode-end--
+

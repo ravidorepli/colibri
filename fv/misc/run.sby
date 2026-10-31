@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: 2026 CERN
+#
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
+# ------------------------------------------------------------------------------------ TASKS -------
+[tasks]
+--pycode-begin--
+for name in [ # -------------- List all components to PROVE --------------------
+    'be_add_lead',
+    'be_add_trail',
+    'be_remove_lead',
+    'be_remove_trail'
+    ]:
+    output(f"{name}_prove prove name_tag_{name}")
+
+for name in [ # -------------- List all components for BMC ---------------------
+    'be_add_lead',
+    'be_add_trail',
+    'be_remove_lead',
+    'be_remove_trail'
+    ]:
+    output(f"{name}_bmc bmc name_tag_{name}")
+
+for name in [ # -------------- List all components to COVER --------------------
+    'be_add_lead',
+    'be_add_trail',
+    'be_remove_lead',
+    'be_remove_trail'
+    ]:
+    output(f"{name}_cover cover name_tag_{name}")
+--pycode-end--
+
+# ----------------------------------------------------------------------------------- OPTIONS ------
+[options]
+depth 25
+prove: mode prove
+bmc: mode bmc
+cover: mode cover
+
+# ----------------------------------------------------------------------------------- ENGINES ------
+[engines]
+bmc: smtbmc
+cover: smtbmc
+prove: abc pdr
+
+# ------------------------------------------------------------------------------------ SCRIPT ------
+[script]
+--pycode-begin--
+for tag in tags:
+    # Generates build scripts for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+
+        add_files = 'utils.vhdl types.vhdl skid_buffer.vhdl'
+
+        output(f"{tag}: ghdl --std=08 --work=colibri {add_files} {name}.vhdl {name}.psl -e {name}")
+        output(f"{tag}: prep -top {name}")
+--pycode-end--
+
+# ------------------------------------------------------------------------------------ FILES -------
+[files]
+../../src/common/utils.vhdl
+../../src/common/types.vhdl
+../../src/common/skid_buffer.vhdl
+
+--pycode-begin--
+for tag in tags:
+    # Includes source files for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+
+        output(f"../../src/misc/{name}.vhdl")
+        output(f"{name}.psl")
+--pycode-end--
+

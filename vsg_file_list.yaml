@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 CERN
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+file_list:
+    - "src/common/*.vhdl"
+    - "src/comms/*.vhdl"
+    - "src/endec/*decode*.vhdl"
+    - "src/endec/*encode*.vhdl"
+    - "src/fileio/*.vhdl"
+    - "src/interfaces/**/*.vhdl"
+    - "src/io/**/*.vhdl"
+    - "src/memory/*.vhdl"
+    - "src/misc/*.vhdl"
+    - "src/packet/*.vhdl"
+    - "src/pipes/*.vhdl"
+    - "src/proto/**/*.vhdl"
+    - "src/proto/**/**/*.vhdl"

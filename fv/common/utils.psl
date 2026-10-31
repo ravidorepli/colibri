@@ -1,0 +1,24 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit utils_vu (utils_fv(rtl)) {
+
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+    assume reset_i;
+    signal s_cntones : natural := 0;
+
+    process (all)
+        variable v_cnt_ones : natural;
+    begin
+            v_cnt_ones := 0;
+            for i in count_ones_i'range loop
+                if(count_ones_i(i)) then
+                    v_cnt_ones := v_cnt_ones + 1;
+                end if;
+            end loop;
+            s_cntones <= v_cnt_ones;
+    end process;
+    t_check_count_ones: assert always (count_ones_o = s_cntones);
+}

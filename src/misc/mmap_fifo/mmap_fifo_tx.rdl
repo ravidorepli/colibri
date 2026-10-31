@@ -1,0 +1,107 @@
+//==============================================================================================
+//                                  Transmit FIFO Registers
+//==============================================================================================
+addrmap txfifo_csr {
+    name = "Transmit FIFO Stream Interface";
+    reg {
+        name = "FIFO Control";
+        desc = "Control the FIFO Behaviour";
+        field {
+            name = "Reset";
+            desc = "Reset the FIFO";
+            hw   = r;
+            sw   = w;
+            singlepulse = true;
+        } rst = 0;
+        field {
+            name = "Flush";
+            desc = "Flush out the content from the FIFO";
+            hw   = r;
+            sw   = w;
+            singlepulse = true;
+        } flush = 0;
+    } ctrl;
+
+    reg {
+        name = "Interrupt Enable Register";
+        default sw   = rw;
+        default hw   = na;
+        field {
+            name = "Transmit Complete";
+            desc = "trasmission of the data has been completed.";
+        } txc = 0;
+        field {
+            name = "Write When Full";
+            desc = "Trying to write to a full FIFO.";
+        } wrf = 0;
+        field {
+            name = "Packet Length Error";
+            desc = "Packet length is set to a forbidden value. 
+                    Packet length must be less or equal to the FIFO occupancy.";
+        } tle = 0;
+    } ier;
+
+    reg {
+        name = "Interrupt Status Register";
+        default sw   = rw;
+        default hw   = w;
+        default woclr;
+        default posedge intr;
+
+        field {
+            name = "Transmit Complete";
+            desc = "trasmission of the data has been completed.";
+        } txc = 0;
+        field {
+            name = "Write When Full";
+            desc = "Trying to write to a full FIFO.";
+        } wrf = 0;
+        field {
+            name = "Packet Length Error";
+            desc = "Packet length is set to a forbidden value. 
+                    Packet length must be less or equal to the FIFO occupancy.";
+        } tle = 0;
+    } isr;
+
+    isr.txc->enable = ier.txc;
+    isr.wrf->enable = ier.wrf;
+    isr.tle->enable = ier.tle;
+
+    reg {
+        name = "Fill Level";
+        desc = "Number of used words in the FIFO";
+        field {
+            hw   = w;
+            sw   = r;
+        } usedw[31:0] = 0x0;
+    } fill;
+
+    reg {
+        name = "Packet Length";
+        desc = "Number of bytes to transmit. If zero, transmit until empty.";
+        field {
+            hw   = r;
+            sw   = rw;
+            swmod = true;
+        } bytes[31:0] = 0x0;
+    } length;
+
+    reg {
+        name = "Write Data";
+            desc = "Data to be written to the FIFO";
+        field {
+            hw   = r;
+            sw   = w;
+        swmod = true;
+        } data[31:0] = 0x0;
+    } write;
+
+    reg {
+        name = "Stream Destination";
+            desc = "Select which destination to send the streamed data to";
+        field {
+            hw   = r;
+            sw   = rw;
+        } id[31:0] = 0x0;
+    } dst;
+};

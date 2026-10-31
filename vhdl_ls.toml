@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 CERN
+# SPDX-License-Identifier: Apache-2.0
+
+standard = "2008"
+
+preferred_case = "lower"
+
+[libraries.colibri]
+files = ["src/**/*.vhdl", "src/**/*.vhd"]
+is_third_party = false
+
+[lint]
+unused = true

@@ -1,0 +1,95 @@
+//==============================================================================================
+//                                  Receive FIFO Registers
+//==============================================================================================
+addrmap rxfifo_csr {
+    name = "Receive FIFO Stream Interface";
+        reg {
+        name = "FIFO Control";
+        desc = "Control the FIFO Behaviour";
+        field {
+            name = "Reset";
+            desc = "Reset the FIFO";
+            hw   = r;
+            sw   = w;
+            singlepulse = true;
+        } rst = 0;
+    } ctrl;
+
+    reg {
+        name = "Interrupt Enable Register";
+        default sw   = rw;
+        default hw   = na;
+        field {
+            name = "Receive Complete";
+            desc = "data reception has been completed.";
+        } rxc = 0;
+        field {
+            name = "Receive When Full";
+            desc = "Trying to receive and write to a full FIFO.";
+        } rwf = 0;
+        field {
+            name = "Read When Empty";
+            desc = "Trying to read an empty FIFO";
+        } rwe = 0;
+    } ier;
+
+    reg {
+        name = "Interrupt Status Register";
+        default sw   = rw;
+        default hw   = w;
+        default woclr;
+        default posedge intr;
+        field {
+            name = "Receive Complete";
+            desc = "New data is available in the FIFO";
+        } rxc = 0;
+        field {
+            name = "Receive When Full";
+            desc = "Trying to receive and write to a full FIFO.";
+        } rwf = 0;
+        field {
+            name = "Read When Empty";
+            desc = "Trying to read an empty FIFO";
+        } rwe = 1;
+    } isr;
+
+    isr.rxc->enable = ier.rxc;
+    isr.rwf->enable = ier.rwf;
+    isr.rwe->enable = ier.rwe;
+
+    reg {
+        name = "Fill Level";
+        desc = "Number of used words in the FIFO";
+        field {
+            hw   = w;
+            sw   = r;
+        } usedw[31:0] = 0x0;
+    } fill;
+
+    reg {
+        name = "Packet Length";
+        desc = "Number of bytes available in the FIFO";
+        field {
+            hw   = w;
+            sw   = r;
+        } bytes[31:0] = 0x0;
+    } length;
+
+    reg {
+        name = "Read Data";
+        desc = "Data to be read from FIFO";
+        field {
+            hw   = w;
+            sw   = r;
+            swacc = true;
+        } data[31:0] = 0x0;
+    } read;
+        reg {
+        name = "Stream Source";
+            desc = "Source of the data buffered in FIFO";
+        field {
+            hw   = w;
+            sw   = r;
+        } id[31:0] = 0x0;
+    } src;
+};

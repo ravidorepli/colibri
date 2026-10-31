@@ -1,0 +1,153 @@
+# SPDX-FileCopyrightText: 2026 CERN
+#
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
+# ------------------------------------------------------------------------------------ TASKS -------
+[tasks]
+--pycode-begin--
+for name in [ # -------------- List all components to PROVE --------------------
+    'counter',
+    'debouncer',
+    'edge_detect',
+    'pipeline_buffer',
+    'skid_buffer',
+    'stream_buffer%g_REGISTER_DATAPATH=true',
+    'stream_buffer%g_REGISTER_DATAPATH=false',
+    'utils'
+    ]:
+    output(f"{name}_prove prove name_tag_{name}")
+
+for name in [ # -------------- List all components for BMC ---------------------
+    'counter',
+    'debouncer',
+    'edge_detect',
+    'pipeline_buffer',
+    'skid_buffer',
+    'stream_buffer%g_REGISTER_DATAPATH=true',
+    'stream_buffer%g_REGISTER_DATAPATH=false',
+    'utils'
+    ]:
+    output(f"{name}_bmc bmc name_tag_{name}")
+
+for name in [ # -------------- List all components to COVER --------------------
+    'counter',
+    'debouncer',
+    'edge_detect',
+    'pipeline_buffer',
+    'skid_buffer',
+    'stream_buffer%g_REGISTER_DATAPATH=true',
+    'stream_buffer%g_REGISTER_DATAPATH=false',
+    'utils'
+    ]:
+    output(f"{name}_cover cover name_tag_{name}")
+--pycode-end--
+
+# ----------------------------------------------------------------------------------- OPTIONS ------
+[options]
+prove: mode prove
+bmc: mode bmc
+cover: mode cover
+
+--pycode-begin--
+depths = { # ------------------------------------ Set BMC depth ----------------
+    'utils' : 10,
+}
+default = 20
+
+for tag in tags:
+    if tag.endswith('_bmc'):
+        name = tag.split('_bmc')[0]
+
+        if name in depths:
+            output(f"{tag}: depth {depths[name]}")
+        else:
+            output(f"{tag}: depth {default}")
+# ------------------------------------------------------------------------------
+--pycode-end--
+
+# ----------------------------------------------------------------------------------- ENGINES ------
+[engines]
+cover: smtbmc
+
+--pycode-begin--
+engines = { # ----------------------------------- Set BMC engine ---------------
+    'utils' : 'btor pono',
+}
+default = 'smtbmc'
+
+for tag in tags:
+    if tag.endswith('_bmc'):
+        name = tag.split('_bmc')[0]
+
+        if name in engines:
+            output(f"{tag}: {engines[name]}")
+        else:
+            output(f"{tag}: {default}")
+# ------------------------------------------------------------------------------
+--pycode-end--
+
+--pycode-begin--
+engines = { # --------------------------------- Set PROVE engine ---------------
+    'utils' : 'smtbmc --nounroll yices',
+}
+default = 'smtbmc'
+
+for tag in tags:
+    if tag.endswith('_prove'):
+        name = tag.split('_prove')[0]
+
+        if name in engines:
+            output(f"{tag}: {engines[name]}")
+        else:
+            output(f"{tag}: {default}")
+# ------------------------------------------------------------------------------
+--pycode-end--
+
+# ------------------------------------------------------------------------------------ SCRIPT ------
+[script]
+--pycode-begin--
+for tag in tags:
+    # Generates build scripts for all unique component names
+    if tag.startswith('name_tag_'):
+        name_w_generic = tag.split('name_tag_')[-1].split("%")
+        name = name_w_generic[0]
+        generics = ''
+        for g in name_w_generic[1:]:
+            generics += f"-g{g}"
+
+        # Set any specific generics, additional files, top entity name ... -----
+        add_files = 'utils.vhdl'
+        entity_name = name
+        if name == 'counter':
+            generics = '-gg_MODULO=10'
+        if name == 'debouncer':
+            add_files += ' debouncer_fv.vhdl counter.vhdl'
+            entity_name += '_fv'
+        if name == 'utils':
+            add_files = 'utils_fv.vhdl'
+            entity_name += '_fv'
+
+        # ----------------------------------------------------------------------
+
+        output(f"{tag}: ghdl --std=08 {generics} --work=colibri {add_files} {name}.vhdl {name}.psl -e {entity_name}")
+        output(f"{tag}: prep -top {entity_name}")
+--pycode-end--
+
+# ------------------------------------------------------------------------------------ FILES -------
+[files]
+../../src/common/utils.vhdl
+../../src/common/counter.vhdl
+debouncer_fv.vhdl
+utils_fv.vhdl
+
+--pycode-begin--
+for tag in tags:
+    # Includes source files for all unique component names
+    if tag.startswith('name_tag_'):
+        name_w_generic = tag.split('name_tag_')[-1].split("%")
+        name = name_w_generic[0]
+        
+        output(f"../../src/common/{name}.vhdl")
+        output(f"{name}.psl")
+--pycode-end--
+

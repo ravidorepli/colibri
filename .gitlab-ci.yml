@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 CERN
+# SPDX-License-Identifier: Apache-2.0
+
+stages:
+  - prepare
+  - simulate
+  - formal
+  - document
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+      when: always
+
+    - if: $CI_PIPELINE_SOURCE == 'web'
+      when: always
+    - if: $CI_PIPELINE_SOURCE == 'trigger'
+      when: always
+    - if: $CI_PIPELINE_SOURCE == 'pipeline'
+      when: always
+
+    - if: $CI_COMMIT_TAG
+      when: always
+
+    - if: '$CI_COMMIT_BRANCH == "master" || $CI_COMMIT_REF_NAME == "master"'
+      when: always
+    - if: '$CI_COMMIT_BRANCH == "devel" || $CI_COMMIT_REF_NAME == "devel"'
+      when: always
+    - if: '$CI_COMMIT_BRANCH == "feat-ci" || $CI_COMMIT_REF_NAME == "feat-ci"'
+      when: always
+
+    - if: $FORCE_RUN == "true"
+      when: always
+
+    # 7. Default: Do not run for anything else
+    - when: never
+
+include:
+  - utils/ci_jobs/style_ci.yml
+  - utils/ci_jobs/simulation_ci.yml
+  - utils/ci_jobs/formal_ci.yml
+
+
+## DOCUMENTATION
+pages:
+  stage: document
+  image: registry.cern.ch/docker.io/alpine:3.21
+  script:
+    - apk update && apk add doxygen git
+    - cd docs
+    - git clone https://github.com/jothepro/doxygen-awesome-css.git --depth=1
+    - cd ${CI_PROJECT_DIR}
+    - doxygen docs/Doxyfile
+    - mv doxy_out/html/ public/
+  artifacts:
+    paths:
+      - public
+  only:
+    - master

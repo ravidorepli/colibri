@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 CERN
+# SPDX-License-Identifier: Apache-2.0
+
+.vsg_job: &vsg_job
+  stage: prepare
+  image: registry.cern.ch/ci4fpga/vsg:3.31.0
+  tags: ["fpga-mid"]
+  artifacts:
+    reports:
+      junit: ${CI_PROJECT_DIR}/report.xml
+      codequality: ${CI_PROJECT_DIR}/report.json
+  variables:
+    GIT_SUBMODULE_PATHS: vhdl_style_guide
+    GIT_SUBMODULE_STRATEGY: recursive
+    GIT_SUBMODULE_DEPTH: 1
+    GIT_SUBMODULE_FORCE_HTTPS: "true"
+
+style_checker:
+  <<: *vsg_job
+  script: vsg -c ./vhdl_style_guide/colibri_vhdl_style.yaml vsg_file_list.yaml --quality_report ./report.json -j ./report.xml
+  rules:
+    - changes:
+        - .gitlab-ci.yml
+        - utils/ci_jobs/style_ci.yml
+        - src/**/*.vhdl
+        - vhdl_style_guide
+
+license_checker:
+  stage: prepare
+  image: fsfe/reuse:latest
+  image:
+    name: fsfe/reuse:latest
+    entrypoint: [""]
+  script:
+    - reuse lint

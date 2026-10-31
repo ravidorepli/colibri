@@ -1,0 +1,80 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit rle_encode_vu (rle_encode(rtl)) {
+
+    default clock is rising_edge(clk_i);
+-- reset_i the DUT
+    assume {reset_i};
+-- data does not change when pipeline stalls
+    assume always (snk_valid_i = '1' and snk_ready_o = '0') |=> (snk_valid_i = '1' and snk_data_i = prev(snk_data_i));
+
+    signal s_count : natural range 0 to c_WORD_MAX := 0;
+    signal s_word : snk_data_i'subtype;
+    proc_test_encode : process (clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if reset_i = '1' then
+                s_count <= 0;
+                s_word <= (others => '0');
+            else
+                if(snk_valid_i and snk_ready_o) then
+                    s_word <= snk_data_i;
+                    if(snk_data_i /= s_word) or (s_count = c_WORD_MAX) then
+                        s_count <= 1;
+                    else
+                        s_count <= s_count + 1;
+                    end if;
+                end if;
+                if(flush_i = '1') then
+                    s_count <= 0;
+                    s_word <= (others => '0');
+                end if;
+            end if;
+        end if;
+    end process;
+
+    -- assume reduced input size
+    assume always snk_data_i(snk_data_i'left downto 4) = (snk_data_i'left downto 4 => '0');
+    -- output is not valid after reset and register is empty
+    t_no_valid_after_reset: assert always reset_i |=> src_valid_o = '0' ;
+    -- output does not change when backpressure is applied
+    property p_stable_out is ((src_valid_o = '1' and src_ready_i = '0') |=>
+                              (src_valid_o = '1' and src_data_o = prev(src_data_o))) abort reset_i;
+    t_out_stable_backpressure: assert always p_stable_out;
+
+    -- -- output last word if new word is different
+    -- and word count is correct
+    property p_normal_out is ((snk_valid_i = '1' and snk_ready_o = '1' and src_ready_i = '1' and 
+                             snk_data_i /= s_word and s_count /= 0) |=>
+                            (src_valid_o = '1' and src_data_o(g_WORD_WIDTH -1 downto 0) = prev(s_word)) and 
+                            (src_valid_o = '1' and src_data_o(src_data_o'left downto g_WORD_WIDTH) = prev(std_logic_vector(to_unsigned(s_count, g_COUNT_WIDTH))))) abort (reset_i or flush_i);
+    t_rle_out_normal : assert always p_normal_out; 
+    -- -- output last word if new word is different
+    -- and word count is correct
+    property p_ovf_out is ((snk_valid_i = '1' and snk_ready_o = '1' and src_ready_i = '1' and 
+                             snk_data_i /= s_word and s_count = c_WORD_MAX) |=>
+                            (src_valid_o = '1' and src_data_o(g_WORD_WIDTH -1 downto 0) = prev(s_word)) and 
+                            (src_valid_o = '1' and src_data_o(src_data_o'left downto g_WORD_WIDTH) = prev(std_logic_vector(to_unsigned(c_WORD_MAX, g_COUNT_WIDTH))))) abort (reset_i or flush_i);
+    t_rle_out_ovf : assert always p_ovf_out; 
+
+    -- flush buffer (no word in output)
+    property p_flush_empty is ((flush_i = '1' and src_ready_i = '1' and src_valid_o = '0' and s_count /= 0) |=>
+                                (src_valid_o = '1' and src_data_o(g_WORD_WIDTH -1 downto 0) = prev(s_word) )) abort (reset_i or snk_valid_i);
+    t_rle_flush_empty : assert always p_flush_empty;
+
+    -- flush buffer (word in buffer and in skid)
+    property p_flush_buffered_no_in is ((flush_i = '1' and src_ready_i = '1' and src_valid_o = '1' and rreg.ready = '1' and s_count /= 0) |=>
+                                (src_valid_o = '1' and src_data_o(g_WORD_WIDTH -1 downto 0) = prev(s_word) )) abort (reset_i or snk_valid_i);
+    t_rle_flush_buffered_no_in : assert always p_flush_buffered_no_in;
+    
+    -- flush buffer (word in buffer, not in skid)
+    property p_flush_buffered_no_skid is ({not flush_i; (flush_i = '1' and src_ready_i = '1' and src_valid_o = '0' and prev(s_count) /= 0)} |=>
+                                (src_valid_o = '1' and src_data_o(g_WORD_WIDTH -1 downto 0) = prev(prev(s_word)) )) abort (reset_i or snk_valid_i);
+    t_rle_flush_buffered_no_skid : assert always p_flush_buffered_no_skid;
+
+    -- consecutive flush result in not valid output
+    property p_double_flush is ({not snk_valid_i and not flush_i; flush_i[*]; flush_i and (not src_valid_o or (src_valid_o and src_ready_i)); flush_i and src_ready_i} |=> not src_valid_o) abort reset_i;
+    t_double_flush : assert always p_double_flush;
+}

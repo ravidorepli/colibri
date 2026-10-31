@@ -1,0 +1,38 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit fifo_vu (fifo(rtl)) {
+    
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+
+    -- reset_i the DUT
+    assume {reset_i; not reset_i};
+    assume always (not reset_i) |=> (not reset_i);
+    assume always (reset_i) -> (not wrreq_i and not rdreq_i);
+    --fifo is empty_o after reset_i
+    t_after_reset_empty : assert always (reset_i) |=> (empty_o);
+    --fifo is not full_o after reset_i
+    t_after_reset_n_full : assert always (reset_i) |=> (not full_o);
+    --fifo usedw_o is 0 after reset_i
+    t_after_reset_usedw : assert always (reset_i) |=> (usedw_o = (usedw_o'range => '0') );
+
+    -- correct behaviour of empty_o
+    t_usedw_empty: assert always (usedw_o = (usedw_o'range => '0')) |-> (empty_o);
+    -- correct behaviour of full_o
+    t_usedw_full: assert always (usedw_o = (usedw_o'range => to_unsigned(g_NUM_WORDS,usedw_o'length))) |-> (full_o);
+
+    -- normal behaviour
+    -- only write
+    t_wr_no_rd_normal : assert always (wrreq_i and not rdreq_i and not full_o) |=> (usedw_o = prev(usedw_o) + 1);
+    -- only read
+    t_no_wr_rd_normal : assert always (not wrreq_i and rdreq_i and not empty_o) |=> (usedw_o = prev(usedw_o) - 1);
+    -- read write
+    t_wr_rd_normal : assert always (wrreq_i and rdreq_i and not full_o and not empty_o) |=> (usedw_o = prev(usedw_o));
+
+    -- overflow behaviour
+    t_wr_on_full : assert always (wrreq_i and full_o) |=> (wr_ptr = prev(wr_ptr));
+    -- underflow behaviour
+    t_rd_on_empty : assert always (rdreq_i and empty_o) |=> (rd_ptr = prev(rd_ptr));
+}

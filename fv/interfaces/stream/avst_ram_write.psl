@@ -1,0 +1,79 @@
+--==================================================================================================
+--! @brief Formal verification assertions for the `avst_ram_write` component
+--!
+--! @author Mitja Vodnik <mitja.vodnik@cern.ch> (CERN - EP-LBC)
+--! @date 22-01-2026 Created
+--! @version 0.1
+--! @copyright CERN 2026
+-- SPDX-FileCopyrightText: 2026 CERN
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+--==================================================================================================
+
+vunit avst_ram_write_vu(avst_ram_write(rtl)) {
+
+    default clock is rising_edge(clk_i);
+    assume {reset_i};
+
+    ---------------------------------------------------------------------------- VHDL --------------
+
+    signal packet_active : std_logic;
+
+    process (clk_i) is
+    begin
+        if rising_edge(clk_i) then
+            if (snk_eop_i and snk_valid_i) then
+                packet_active <= '0';
+            elsif (snk_sop_i and snk_valid_i) then
+                packet_active <= '1';
+            end if;
+
+            if (reset_i) then
+                packet_active <= '0';
+            end if;
+        end if;
+    end process;
+
+    attribute anyconst : boolean;
+    -- Data value to check
+    signal c_DATA : snk_data_i'subtype;
+    attribute anyconst of c_DATA : signal is true;
+    -- Address value to check
+    signal c_ADDR : start_addr_i'subtype;
+    attribute anyconst of c_ADDR : signal is true;
+
+    ---------------------------------------------------------------------------- ASSUMPTIONS -------
+
+    ---------------------------------------------------------------------------- ASSERTIONS --------
+
+    -- Synchronous reset
+    property prop_reset is reset_i -> next (not wr_en_o) and (nor wr_addr_o) and (nor wr_data_o);
+    reset : assert always prop_reset;
+
+    -- Writing starts on SoP
+    property prop_sop_start is (
+        snk_sop_i = '1' and snk_valid_i = '1' and snk_data_i = c_DATA and start_addr_i = c_ADDR ->
+        next wr_en_o = '1' and wr_data_o = c_DATA and wr_addr_o = c_ADDR
+    ) abort reset_i;
+    sop_start : assert always prop_sop_start;
+
+    -- Valid data word result in RAM write
+    property prop_valid_data is (
+        packet_active = '1' and snk_valid_i = '1' and snk_data_i = c_DATA ->
+        next wr_en_o = '1' and wr_data_o = c_DATA
+    ) abort reset_i;
+    valid_data : assert always prop_valid_data;
+
+    -- Address increments with each new word written
+    property prop_addr_inc is (
+        packet_active = '1' and wr_en_o = '1' and wr_addr_o = c_ADDR ->
+        next next_event(wr_en_o)(wr_addr_o = c_ADDR + 1)
+    ) abort (reset_i or ((snk_eop_i or snk_sop_i) and snk_valid_i));
+    addr_inc : assert always prop_addr_inc;
+
+    -- Invalid data does not get written
+    property prop_invalid_data is (
+        (packet_active = '0' and snk_sop_i = '0') or snk_valid_i = '0' -> next wr_en_o = '0'
+    ) abort reset_i;
+    invalid_data : assert always prop_invalid_data;
+
+} --------------------------------------------------------------------------------------------------

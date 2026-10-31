@@ -1,0 +1,107 @@
+--==================================================================================================
+--! @brief Formal verification assertions for the `avst_ram_write_unaligned` component
+--!
+--! @author Mitja Vodnik <mitja.vodnik@cern.ch> (CERN - EP-LBC)
+--! @date 20-01-2026 Created
+--! @version 0.1
+--! @copyright CERN 2026
+-- SPDX-FileCopyrightText: 2026 CERN
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+--==================================================================================================
+
+vunit avst_ram_write_unaligned_vu(avst_ram_write_unaligned(rtl)) {
+
+    default clock is rising_edge(clk_i);
+    assume {reset_i};
+
+    ---------------------------------------------------------------------------- VHDL --------------
+
+    ---------------------------------------------------------------------------- ASSUMPTIONS -------
+
+    -- Flush is only used with no valid data
+    assume always snk_valid_i -> not flush_i;
+
+    -- Empty is only set at EoP
+    assume always (not snk_eop_i) -> snk_empty_i = 0;
+
+    ---------------------------------------------------------------------------- ASSERTIONS --------
+
+    -- Synchronous reset
+    property prop_reset is reset_i -> next (or wr_be_o = '0') and (r.state = S_IDLE);
+    reset : assert always prop_reset;
+
+    -- Trasitions from S_IDLE
+    property prop_idle_to_idle is (
+        r.state = S_IDLE and (not (snk_valid_i and snk_sop_i and snk_ready_o)) ->
+        next r.state = S_IDLE
+    ) abort reset_i;
+    idle_to_idle : assert always prop_idle_to_idle;
+    property prop_idle_to_sop is (
+        r.state = S_IDLE and snk_valid_i and snk_sop_i and snk_ready_o -> next r.state = S_SOP
+    ) abort reset_i;
+    idle_to_sop : assert always prop_idle_to_sop;
+    -- Trasitions from S_SOP
+    property prop_sop_1cc is (
+        r.state = S_SOP and not ((snk_sop_i = '1' and snk_valid_i = '1' and snk_ready_o = '1') and
+        prev(snk_eop_i = '1' and (snk_empty_i >= start_addr_i mod g_WORD_BYTES)))
+        -> next r.state /= S_SOP
+    ) abort reset_i;
+    sop_1cc : assert always prop_sop_1cc;
+    property prop_sop_to_sop is (
+        {snk_eop_i = '1' and (snk_empty_i >= start_addr_i mod g_WORD_BYTES);
+        r.state = S_SOP and (snk_sop_i = '1' and snk_valid_i = '1' and snk_ready_o = '1')} |=> r.state = S_SOP
+    ) abort reset_i;
+    sop_to_sop : assert always prop_sop_to_sop;
+    property prop_sop_to_idle is (
+        {snk_eop_i = '1' and (snk_empty_i >= start_addr_i mod g_WORD_BYTES);
+        r.state = S_SOP and snk_sop_i = '0'} |=> r.state = S_IDLE
+    ) abort reset_i;
+    sop_to_idle : assert always prop_sop_to_idle;
+    property prop_sop_to_write is (
+        {snk_eop_i = '0'; r.state = S_SOP and snk_eop_i = '0' and flush_i = '0'} |=>
+        r.state = S_WRITE
+    ) abort reset_i;
+    sop_to_write : assert always prop_sop_to_write;
+    property prop_sop_to_eop_1cc is (
+        {snk_eop_i = '1' and (snk_empty_i < start_addr_i mod g_WORD_BYTES);
+        r.state = S_SOP} |=> r.state = S_EOP
+    ) abort reset_i;
+    sop_to_eop_1cc : assert always prop_sop_to_eop_1cc;
+    property prop_sop_to_eop_2cc is (
+        {snk_eop_i = '0'; (snk_eop_i and snk_valid_i) and r.state = S_SOP} |=> r.state = S_EOP
+    ) abort reset_i;
+    sop_to_eop_2cc : assert always prop_sop_to_eop_2cc;
+    -- Trasitions from S_WRITE
+    property prop_write_to_write is (
+        r.state = S_WRITE and (snk_eop_i = '0' or snk_valid_i = '0') and flush_i = '0' ->
+        next r.state = S_WRITE
+    ) abort reset_i;
+    write_to_write : assert always prop_write_to_write;
+    property prop_write_to_eop is (
+        r.state = S_WRITE and ((snk_eop_i = '1' and snk_valid_i = '1') or flush_i = '1') ->
+        next r.state = S_EOP
+    ) abort reset_i;
+    write_to_eop : assert always prop_write_to_eop;
+    -- Trasitions from S_EOP
+    property prop_eop_to_eop is (
+        r.state = S_EOP and snk_ready_o = '0' -> next r.state = S_EOP
+    ) abort reset_i;
+    eop_to_eop : assert always prop_eop_to_eop;
+    property prop_eop_to_idle is (
+        r.state = S_EOP and snk_ready_o = '1' and (snk_sop_i = '0' or snk_valid_i = '0') ->
+        next r.state = S_IDLE
+    ) abort reset_i;
+    eop_to_idle : assert always prop_eop_to_idle;
+    property prop_eop_to_sop is (
+        r.state = S_EOP and snk_ready_o = '1' and snk_sop_i = '1' and snk_valid_i = '1' ->
+        next r.state = S_SOP
+    ) abort reset_i;
+    eop_to_sop : assert always prop_eop_to_sop;
+
+    -- Data is flushed on command
+    property prop_flush is (
+        r.state /= S_IDLE and r.state /= S_EOP and flush_i = '1' -> next r.state = S_IDLE or r.state = S_EOP
+    ) abort reset_i;
+    flush : assert always prop_flush;
+
+} --------------------------------------------------------------------------------------------------

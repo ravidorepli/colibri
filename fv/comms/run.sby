@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: 2026 CERN
+#
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
+# ------------------------------------------------------------------------------------ TASKS -------
+[tasks]
+--pycode-begin--
+for name in [ # -------------- List all components to PROVE --------------------
+    'gearbox_down',
+    'gearbox_up'
+    ]:
+    output(f"{name}_prove prove name_tag_{name}")
+
+for name in [ # -------------- List all components for BMC ---------------------
+    'gearbox_down',
+    'gearbox_up'
+    ]:
+    output(f"{name}_bmc bmc name_tag_{name}")
+
+for name in [ # -------------- List all components to COVER --------------------
+    'gearbox_down',
+    'gearbox_up'
+    ]:
+    output(f"{name}_cover cover name_tag_{name}")
+--pycode-end--
+
+# ----------------------------------------------------------------------------------- OPTIONS ------
+[options]
+prove: mode prove
+bmc: mode bmc
+bmc: depth 20
+cover: mode cover
+
+
+# ----------------------------------------------------------------------------------- ENGINES ------
+[engines]
+smtbmc
+
+# ------------------------------------------------------------------------------------ SCRIPT ------
+[script]
+--pycode-begin--
+for tag in tags:
+    # Generates build scripts for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+
+        # Set any specific generics, additional files, top entity name ... -----
+        generics = ''
+        add_files = 'utils.vhdl'
+        entity_name = 'gearbox'
+        if name == 'gearbox_down':
+            generics = '-gg_INPUT_WIDTH=12 -gg_OUTPUT_WIDTH=4'
+        if name == 'gearbox_up':
+            generics = '-gg_INPUT_WIDTH=4 -gg_OUTPUT_WIDTH=12'
+        # ----------------------------------------------------------------------
+
+        output(f"{tag}: ghdl --std=08 --work=colibri {generics} {add_files}\
+                    {entity_name}.vhdl {name}.psl -e {entity_name}")
+        output(f"{tag}: prep -top {entity_name}")
+--pycode-end--
+
+# ------------------------------------------------------------------------------------ FILES -------
+[files]
+../../src/common/utils.vhdl
+../../src/comms/gearbox.vhdl
+
+--pycode-begin--
+for tag in tags:
+    # Includes source files for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+        output(f"{name}.psl")
+--pycode-end--
+

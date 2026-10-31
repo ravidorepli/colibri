@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 CERN
+# SPDX-License-Identifier: Apache-2.0
+
+formal_jobs:
+  stage: formal
+  image: registry.cern.ch/ci4fpga/oss-cad-suite:2025.05
+  tags: ["fpga-mid"]
+  before_script:
+    - cd fv/${MODULE}
+  script:
+    - exit_code=0
+    - sby --yosys "yosys -m ghdl" -f run.sby || exit_code=$?
+    - sby --yosys "yosys -m ghdl" --status -f run.sby | python3 $CI_PROJECT_DIR/utils/fv_to_junit.py > ${CI_PROJECT_DIR}/fv.xml
+    # --statuscsv option is supported from sby v0.55 / add --csv flag to fv_to_junit.py
+    - if [ $exit_code -ne 0 ]; then echo "FV failed"; exit $exit_code; fi;
+  artifacts:
+    name: ${MODULE}_fv_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}
+    when: always
+    expire_in: 1 week
+    paths:
+      - ${CI_PROJECT_DIR}/fv.xml
+    reports:
+      junit: ${CI_PROJECT_DIR}/fv.xml
+  needs: []
+  parallel:
+    matrix:
+      - MODULE: pipes
+      - MODULE: common
+      - MODULE: endec
+      - MODULE: interfaces/stream
+      - MODULE: memory
+      - MODULE: misc
+      - MODULE: packet
+  rules:
+    - changes:
+        - .gitlab-ci.yml
+        - utils/ci_jobs/formal_ci.yml
+        - src/${MODULE}/**/*.vhdl
+        - fv/${MODULE}/**/*.psl

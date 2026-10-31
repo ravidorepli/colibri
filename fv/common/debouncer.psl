@@ -1,0 +1,20 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit debouncer_vu (debouncer(rtl)) {
+    
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+
+    assume reset_i;
+
+    attribute anyconst : boolean;
+    signal s_val : data_i'subtype;
+    attribute anyconst of s_val : signal is true;
+
+    -- input is copied to output when stable
+    t_stable_in : assert always {(not reset_i and data_i=s_val)[*12]} |=> {data_o = s_val};
+    -- input is NOT copied to output when stable
+    t_unsstable_in : assert always {(not reset_i and data_i=s_val)[*1 to 11];(not reset_i and data_i/=s_val)} |=> {stable(data_o)};
+}

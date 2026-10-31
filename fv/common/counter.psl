@@ -1,0 +1,19 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit counter_vu (counter(rtl)) {
+    
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+
+    assume reset_i;
+    -- valid reset
+    t_valid_reset : assert always prev(reset_i) and not reset_i -> counter_int = (counter_int'range => '0') and wraparound_o = '0' and value_o = (value_o'range => '0');
+    -- test not counting
+    t_not_counting : assert always not reset_i and not enable_i |=> stable(counter_int);
+    -- test counting
+    t_count : assert always not reset_i and enable_i and counter_int /= to_unsigned( g_MODULO -1, counter_int'length) |=> counter_int = prev(counter_int + 1);
+    -- test wrap around
+    t_wraparound : assert always not reset_i and enable_i and counter_int = to_unsigned( g_MODULO -1, counter_int'length) |=> counter_int = to_unsigned( 0, counter_int'length) and prev(wraparound_o);
+}

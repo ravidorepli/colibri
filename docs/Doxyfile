@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 CERN
+#
+# SPDX-License-Identifier: CC-BY-SA-4.0
+
+# Doxyfile
+
+PROJECT_NAME           = "colibri"
+PROJECT_BRIEF          = "Open Source, Vendor Independent VHDL Common Library"
+PROJECT_LOGO           = docs/logo/colibri_small_docs.png
+OUTPUT_DIRECTORY       = doxy_out
+GENERATE_XML           = NO
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+INPUT                  = src readme.md
+USE_MDFILE_AS_MAINPAGE = ./readme.md
+FILE_PATTERNS          = *.vhdl *.md
+IMAGE_PATH             = docs
+INCLUDE_PATH           = src
+RECURSIVE              = YES
+EXTRACT_ALL            = YES
+OPTIMIZE_OUTPUT_FOR_C  = NO
+MARKDOWN_SUPPORT       = YES
+EXCLUDE_SYMBOLS        = ieee std
+GENERATE_TREEVIEW      = YES # optional. Also works without treeview
+DISABLE_INDEX = NO
+FULL_SIDEBAR = NO
+HTML_EXTRA_STYLESHEET  = docs/doxygen-awesome-css/doxygen-awesome.css
+HTML_COLORSTYLE        = LIGHT # required with Doxygen >= 1.9.5
+LAYOUT_FILE			   = docs/DoxygenLayout.xml
+WARNINGS			   = YES

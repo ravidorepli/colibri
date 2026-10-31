@@ -1,0 +1,27 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit arbiter_vu (arbiter(rtl)) {
+    
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+
+    -- reset the DUT
+    assume {reset_i; not reset_i};
+    assume always (not reset_i) |=> (not reset_i);
+    sequence idle is {not reset_i};
+    
+    -- only one grant at a time
+    t_single_grant : assert always (not reset_i) -> (onehot0(grants_o));
+    -- grant is related to a request
+    t_req_grant : assert always (onehot(requests_i) and not reset_i) -> (onehot(requests_i and grants_o));
+    -- no grant if no request
+    t_no_grant_if_no_req : assert always (or requests_i = '0' and not reset_i) -> (or grants_o = '0'); 
+    -- test stable grant
+    t_stable_grant : assert always {idle; or(prev(requests_i and grants_o) and requests_i) = '1'} |-> {grants_o = prev(grants_o)};
+    -- test grant change when request ends
+    t_change_grant : assert always {idle; or(prev(requests_i and grants_o) and requests_i) = '0' and (or requests_i = '1')} |-> {grants_o /= prev(grants_o)};
+    -- round robin
+    t_round_robin : assert always {idle; prev(requests_i and grants_o) /= (requests_i and grants_o)} |=> {priority /= prev(priority)};
+}

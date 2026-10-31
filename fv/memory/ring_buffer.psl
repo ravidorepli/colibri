@@ -1,0 +1,73 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+--! @file ring_buffer.psl
+--! @brief PSL Assertions for Ring Buffer Formal Verification
+--! @author Alberto Perro
+--! @date 25-02-2026 Updated
+--! @version 1.1
+--! @copyright CERN 2026
+--==================================================================================================
+
+--==================================================================================================
+--! @brief PSL Verification Unit for ring_buffer
+--! @details
+--! This unit implements:
+--! SAFETY: reset, valid, counter overflow.
+--! LIVENESS: data must be valid at some point.
+--! COVER: check for circular buffer overflow.
+--==================================================================================================
+
+vunit ring_buffer_fv(ring_buffer(rtl)) {
+
+  -- Default clock for all properties
+  default clock is rising_edge(clk_i);
+  assume {reset_i};
+
+  -- SAFETY: Reset Behavior
+  -- After reset is released, the buffer must be empty.
+  property p_reset_state is 
+    always {reset_i} |=> {src_valid_o = '0' and rreg.usedw = 0};
+  t_reset_state: assert p_reset_state;
+
+  -- SAFETY: Counter Integrity
+  -- The internal count should never exceed capacity.
+  property p_count_max is 
+    always ({rreg.usedw <= g_NUM_WORDS}) abort reset_i;
+  t_count_max: assert p_count_max;
+
+  -- SAFETY: Overwrite Logic
+  -- If the buffer is full and we write without reading, it remains full (circular behavior).
+  property p_overwrite_full is 
+    always ({snk_valid_i = '1' and (rreg.usedw = g_NUM_WORDS) and src_ready_i = '0'} 
+    |=> {rreg.usedw = g_NUM_WORDS}) abort reset_i;
+  t_overwrite_full: assert p_overwrite_full;
+
+  -- SAFETY: Empty logic
+  -- If the buffer is empty, valid should be low.
+  property p_empty_read is 
+    always ({rreg.usedw = 0} |-> {src_valid_o = '0'}) abort reset_i;
+  t_empty_read: assert p_empty_read;
+
+  -- SAFETY: Stable data when not full
+  -- If src_valid_o is high but not ready, data and valid must stay stable until accepted.
+  property p_data_stable_norm is 
+    always ({src_valid_o = '1' and src_ready_i = '0' and rreg.usedw < g_NUM_WORDS} 
+    |=> {stable(src_data_o) and src_valid_o = '1'}) abort reset_i;
+  t_data_stable_norm: assert p_data_stable_norm;
+
+  -- LIVENESS: Data must eventually be available
+  -- If we write to a non-full buffer, src_valid_o must eventually go high.
+  property p_data_availability is 
+    always ({snk_valid_i = '1' and rreg.usedw < g_NUM_WORDS} 
+    |-> eventually! {src_valid_o}) abort reset_i;
+  t_data_availability: assert p_data_availability;
+
+  -- COVERAGE: Verification of Corner Cases
+  -- Verify that we actually simulated a simultaneous read/write while full.
+  c_full_rw : cover {snk_valid_i = '1' and src_ready_i = '1' and src_valid_o = '1' and (rreg.usedw = g_NUM_WORDS)};
+  c_full_write : cover {snk_valid_i = '1' and src_ready_i = '0' and (rreg.usedw = g_NUM_WORDS)};
+  c_read_only : cover {snk_valid_i = '0' and src_ready_i = '1' and src_valid_o = '1'};
+
+}

@@ -1,0 +1,123 @@
+# SPDX-FileCopyrightText: 2026 CERN
+#
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
+# ------------------------------------------------------------------------------------ TASKS -------
+[tasks]
+--pycode-begin--
+for name in [ # -------------- List all components to PROVE --------------------
+    'broadcaster',
+    'deinterleaver',
+    'header_add',
+    'header_remove',
+    'interleaver_bd',
+    'interleaver',
+    'packet_join',
+    'packet_delay'
+    ]:
+    output(f"{name}_prove prove name_tag_{name}")
+
+for name in [ # -------------- List all components for BMC ---------------------
+    'broadcaster',
+    'deinterleaver',
+    'header_add',
+    'header_remove',
+    'interleaver_bd',
+    'interleaver'
+    ]:
+    output(f"{name}_bmc bmc name_tag_{name}")
+
+for name in [ # -------------- List all components to COVER --------------------
+    'broadcaster',
+    'deinterleaver',
+    'header_add',
+    'header_remove',
+    'interleaver_bd',
+    'interleaver',
+    'packet_join',
+    'packet_delay'
+    ]:
+    output(f"{name}_cover cover name_tag_{name}")
+--pycode-end--
+
+# ----------------------------------------------------------------------------------- OPTIONS ------
+[options]
+depth 20
+prove: mode prove
+bmc: mode bmc
+cover: mode cover
+
+# ----------------------------------------------------------------------------------- ENGINES ------
+[engines]
+cover: smtbmc
+bmc: abc bmc3
+prove: abc pdr
+
+# ------------------------------------------------------------------------------------ SCRIPT ------
+[script]
+--pycode-begin--
+for tag in tags:
+    # Generates build scripts for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+
+        # Set any specific generics, additional files, top entity name ... -----
+        ghdl_flags = ''
+        generics = ''
+        add_files = 'utils.vhdl types.vhdl'
+        entity_name = name
+        if name == 'broadcaster' or name == 'deinterleaver':
+            generics = '-gg_NUM_OUTPUTS=3 -gg_DATA_WIDTH=16'
+            add_files += ' pipeline_buffer.vhdl'
+        if name == 'header_add':
+            generics = '-gg_HEADER_BYTES=3 -gg_DATA_WIDTH=32'
+            add_files += ' skid_buffer.vhdl be_add_lead.vhdl'
+        if name == 'header_remove':
+            generics = '-gg_HEADER_BYTES=3 -gg_DATA_WIDTH=32'
+            add_files += ' skid_buffer.vhdl be_remove_lead.vhdl'
+        if name == 'interleaver':
+            generics = '-gg_NUM_INPUTS=3 -gg_DATA_WIDTH=16'
+            add_files += ' pipeline_buffer.vhdl'
+        if name == 'interleaver_bd':
+            generics = '-gg_NUM_INPUTS=3 -gg_DATA_WIDTH=16 -gg_INTERLEAVE_WORDS=false'
+            add_files += ' pipeline_buffer.vhdl'
+            entity_name = 'interleaver'
+        if name == 'packet_delay':
+            ghdl_flags += ' -frelaxed'
+            add_files += ' counter.vhdl avst_fifo.vhdl fifo.vhdl cc_fifo.vhdl synchro.vhdl synchro_reset.vhdl gearbox.vhdl encoders.vhdl'
+        # ----------------------------------------------------------------------
+
+        output(f"{tag}: ghdl --std=08 {ghdl_flags} --work=colibri\
+                      {generics}  {add_files} {entity_name}.vhdl {name}.psl -e {entity_name}")
+        output(f"{tag}: prep -top {entity_name}")
+--pycode-end--
+
+# ------------------------------------------------------------------------------------ FILES -------
+[files]
+../../src/common/utils.vhdl
+../../src/common/types.vhdl
+../../src/common/encoders.vhdl
+../../src/common/skid_buffer.vhdl
+../../src/common/pipeline_buffer.vhdl
+../../src/common/counter.vhdl
+../../src/common/synchro.vhdl
+../../src/common/synchro_reset.vhdl
+../../src/comms/gearbox.vhdl
+../../src/misc/be_add_lead.vhdl
+../../src/misc/be_remove_lead.vhdl
+../../src/packet/interleaver.vhdl
+../../src/interfaces/stream/avst_fifo.vhdl
+../../src/memory/fifo.vhdl
+../../src/memory/cc_fifo.vhdl
+
+--pycode-begin--
+for tag in tags:
+    # Includes source files for all unique component names
+    if tag.startswith('name_tag_'):
+        name = tag.split('name_tag_')[-1]
+
+        output(f"{name}.psl")
+        if name == 'interleaver_bd': continue
+        output(f"../../src/packet/{name}.vhdl")
+--pycode-end--
+

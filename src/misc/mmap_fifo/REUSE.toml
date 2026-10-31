@@ -1,0 +1,10 @@
+version = 1
+
+[[annotations]]
+path = [
+    "*.rdl",
+    "vhdl_if/*",
+    "requirements.txt"
+]
+SPDX-FileCopyrightText = "2026 CERN"
+SPDX-License-Identifier = "CERN-OHL-W-2.0"

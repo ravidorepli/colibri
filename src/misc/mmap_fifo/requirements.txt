@@ -1,0 +1,2 @@
+peakrdl
+peakrdl-regblock-vhdl>=1.2.0.0

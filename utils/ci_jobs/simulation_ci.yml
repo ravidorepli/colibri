@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: 2026 CERN
+# SPDX-License-Identifier: Apache-2.0
+
+sim_jobs:
+  stage: simulate
+  image: registry.cern.ch/ci4fpga/nvc:1.16.1
+  tags: ["fpga-mid"]
+  artifacts:
+    name: ${MODULE}_${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHORT_SHA}
+    when: always
+    expire_in: 1 month
+    paths:
+      - ${CI_PROJECT_DIR}/vunit_out/
+    reports:
+      junit: ${CI_PROJECT_DIR}/vunit_out/report.xml
+  before_script:
+    - export PIP_CACHE_DIR="$CI_PROJECT_DIR/.cache/pip"
+    - python3 -m pip install peakrdl peakrdl-regblock-vhdl
+  needs: []
+  cache:
+    - key: pip-cache
+      paths:
+        - .cache/pip
+      policy: pull-push
+    - key: submodules-uvvm
+      paths:
+        - UVVM/
+      policy: pull-push
+  variables:
+    GIT_SUBMODULE_PATHS: UVVM
+    GIT_SUBMODULE_STRATEGY: recursive
+    GIT_SUBMODULE_DEPTH: 1
+    GIT_SUBMODULE_FORCE_HTTPS: "true"
+  parallel:
+    matrix:
+      - MODULE: packet
+      - MODULE: common
+      - MODULE: endec
+      - MODULE: pipes
+      - MODULE: comms
+      - MODULE: fileio
+      - MODULE: misc
+      - MODULE: memory
+      - MODULE: interfaces
+      - MODULE: io/i2c
+      - MODULE: io/jtag
+      - MODULE: io/uart
+      - MODULE: io/spi
+      - MODULE: proto/aurora_64b66b
+  script:
+    - python3 sim/${MODULE}/run.py -x ./vunit_out/report.xml
+  rules:
+    - changes:
+        - .gitlab-ci.yml
+        - utils/ci_jobs/simulation_ci.yml
+        - src/${MODULE}/**/*.vhdl
+        - sim/${MODULE}/**/*.vhdl

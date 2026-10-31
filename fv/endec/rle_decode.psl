@@ -1,0 +1,68 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit rle_decode_vu (rle_decode(rtl)) {
+
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+-- reset_i the DUT
+    assume {reset_i};
+-- data does not change when pipeline stalls
+    assume always (snk_valid_i = '1' and snk_ready_o = '0') |=> (snk_valid_i = '1' and snk_data_i = prev(snk_data_i));
+
+    signal s_count : unsigned(g_COUNT_WIDTH - 1 downto 0);
+    signal s_count_src : natural range 0 to 2**g_COUNT_WIDTH;
+    signal s_count_reg : natural range 0 to 2**g_COUNT_WIDTH;
+    signal s_data_reg : src_data_o'subtype;
+    signal s_word : src_data_o'subtype;
+    proc_decode : process (clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if reset_i = '1' then
+                s_count <= (others => '0');
+                s_word <= (others => '0');
+                s_data_reg <= (others => '0');
+                s_count_reg <= 0;
+                s_count_src <= 0;
+            else
+                if(snk_valid_i and snk_ready_o) then
+                    s_word <= snk_data_i(g_WORD_WIDTH - 1 downto 0);
+                    s_count <= unsigned(snk_data_i(snk_data_i'left downto g_WORD_WIDTH));
+                end if;
+                if(src_valid_o and src_ready_i) then
+                    s_count_src <= s_count_src + 1;
+                    if(src_data_o /= s_data_reg) then
+                        s_count_src <= 1;
+                        s_count_reg <= to_integer(s_count);
+                    else
+                        s_count_src <= s_count_src + 1;
+                    end if;
+                    s_data_reg <= src_data_o;
+                end if;
+            end if;
+        end if;
+    end process;
+
+    -- change input
+    assume always snk_valid_i -> snk_data_i(g_WORD_WIDTH -1 downto 0) /= s_word;
+-- output is not valid after reset and register is empty
+    t_no_valid_after_reset: assert always reset_i |=> src_valid_o = '0' ;
+    -- output does not change when backpressure is applied
+    property p_stable_out is ((src_valid_o = '1' and src_ready_i = '0') |=>
+                              (src_valid_o = '1' and src_data_o = prev(src_data_o))) abort reset_i;
+    t_out_stable_backpressure: assert always p_stable_out;
+-- RLE specifics
+-- rle encodes always one word
+    assume always snk_data_i(snk_data_i'left downto g_WORD_WIDTH) /= (g_COUNT_WIDTH - 1 downto 0 => '0');
+    -- reduce input size
+    assume always snk_data_i(snk_data_i'left - 7 downto 0) = (snk_data_i'left - 7 downto 0 => '0');
+
+-- rle decode normal
+    t_rle_forward: assert always ((snk_valid_i = '1' and snk_ready_o = '1' and
+                                   src_ready_i = '1' and src_valid_o = '0') |=>
+                                  (src_valid_o = '1'  and src_data_o = s_word)) abort reset_i;
+                                  
+    t_rle_count : assert always ({snk_valid_i = '1'; (not snk_valid_i)[+]; snk_valid_i = '1' and src_data_o /= prev(src_data_o)} |-> (s_count_reg = s_count_src)) abort (reset_i or not src_ready_i);
+    -- t_rle_repeat: assert always (reset_i = '0' and snk_ready_o = '0') |=> (src_valid_o = '1'  and src_data_o = s_word and src_data_o = prev(src_data_o));
+    }

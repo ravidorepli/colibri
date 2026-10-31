@@ -1,0 +1,6 @@
+{
+    "device" : "xcau25p-ffvb676-1-e",
+    "top" : "header_remove",
+    "g_DATA_WIDTH" : [16],
+    "g_HEADER_BYTES" : [3]
+}

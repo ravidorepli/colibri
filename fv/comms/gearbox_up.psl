@@ -1,0 +1,26 @@
+-- SPDX-FileCopyrightText: 2026 CERN
+--
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+
+vunit gearbox_up_vu (gearbox(rtl)) {
+    
+    default clock is rising_edge(clk_i);
+    attribute keep : boolean;
+
+    -- initial reset of DUT
+    assume reset_i;
+
+    -- if valid, keep valid if not ready
+    assume always not snk_ready_o and snk_valid_i |=> snk_valid_i;
+    -- if not ready and valid, data should be stable
+    assume always not snk_ready_o and snk_valid_i |=> stable(snk_data_i);
+
+    -- if valid keep it valid when not ready
+    t_stable_valid_not_ready : assert always not reset_i and not src_ready_i and src_valid_o |=> src_valid_o or reset_i;
+    -- if not ready and valid, data should be stable
+    t_stable_data: assert always not reset_i and not src_ready_i and src_valid_o |=> stable(src_data_o) or reset_i;
+    -- verify reset state
+    t_valid_reset : assert always prev(reset_i) and not reset_i |-> snk_ready_o = '1' and src_valid_o = '0' and (src_data_o = (src_data_o'range => '0') );
+
+    -- TODO: missing gearbox data check
+    }
