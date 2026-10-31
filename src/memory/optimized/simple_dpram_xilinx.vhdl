@@ -187,7 +187,7 @@ begin --------------------------------------------------------------------------
     report "Implementing a Mixed Width (Asymmetric) dual port RAM. Check FPGA datasheet for allowed widths."
     severity note;
 
-  assert MAXIMUM(c_A_DATA_WIDTH, c_B_DATA_WIDTH) mod MINIMUM(c_A_DATA_WIDTH, c_B_DATA_WIDTH) = 0
+  assert max_int(c_A_DATA_WIDTH, c_B_DATA_WIDTH) mod min_int(c_A_DATA_WIDTH, c_B_DATA_WIDTH) = 0
     report "Smaller port is not a divisor of larger port. Cannot infer RAM with this configuration."
     severity failure;
 
