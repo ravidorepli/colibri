@@ -10,6 +10,9 @@ library ieee;
   use ieee.std_logic_1164.all;
   use ieee.numeric_std.all;
   use ieee.math_real.all;
+  -- hread for std_logic_vector: in std_logic_1164 since VHDL-2008, in std_logic_textio before
+  -- (Quartus Lite / Standard); the package is empty, but still there, in VHDL-2008 tools
+  use ieee.std_logic_textio.all;
 
 library std;
   use std.textio.all;
